@@ -4,7 +4,7 @@ prototype.
 Captures a sustained vowel [a:] and a German continuous-speech passage,
 runs the existing headless acoustic analysis (analysis/, unchanged -- this
 file is presentation only, it does not reinvent any DSP), logs every
-session to voice_log.jsonl, and renders the results as a dark, Oura-style
+session to Supabase when configured (otherwise local voice_log.jsonl), and renders the results as a dark, Oura-style
 dashboard: a composite "Stimm-Score" hero ring, a 30-day trend, an acoustic
 -insights list, and the hexagonal Voice Profile radar. A raw-data QA
 expander is available for verification.
@@ -14,7 +14,7 @@ norm cutoffs follow config.ANALYSIS_LANGUAGE (see config.py) -- independent
 settings, so the dashboard chrome can be read in one language while the
 recorded passage and clinical cutoffs stay tied to the language they were
 validated for.
-This file reads a results dict / the voice_log.jsonl schema and renders it;
+This file reads a results dict / the immutable recording schema and renders it;
 it falls back to ui/mock_data.py's fixture when no real sessions exist yet,
 so the UI can be built/previewed before -- or independently of -- a live
 capture. See README.md for how that fallback is wired and how to remove it.
@@ -39,7 +39,7 @@ from ui.styles import inject as inject_css, COLORS
 from ui.svg_components import hero_ring, gradient_bar, range_bar, radar_chart, trend_chart
 from ui.scoring import goodness, abnormality, composite_stimm_score, group_score, status_word_key, status_color_key
 from ui.aggregation import (
-    load_records, aggregate, latest_and_prior_averages,
+    aggregate, latest_and_prior_averages,
     period_to_ordinal, filter_to_window, trend_window_bounds,
 )
 from ui.mock_data import build_mock_log
@@ -55,6 +55,7 @@ from analysis.indices import compute_avqi, compute_abi
 from analysis.norms import get_norms, flag_all
 from storage.logger import JsonlRecordStore, log_session
 from storage.daily_averages import DailyAverageStore
+from storage.supabase import SupabaseConfig, SupabaseRecordStore, SupabaseStorageError
 
 LOG_PATH = "voice_log.jsonl"
 DAILY_LOG_PATH = "daily_averages.jsonl"
@@ -81,8 +82,22 @@ def _ensure_session_state() -> None:
         st.session_state.trend_metric = "composite"
 
 
+def _record_store() -> tuple[JsonlRecordStore | SupabaseRecordStore, DailyAverageStore | None]:
+    """DETERMINISTIC: select configured Supabase storage; fallback stays local for standalone use."""
+    try:
+        secret_values = st.secrets.get("voxplot_supabase", {})
+    except FileNotFoundError:
+        secret_values = {}
+    config = SupabaseConfig.from_mapping(secret_values)
+    if config is not None:
+        return SupabaseRecordStore(config), None
+    return JsonlRecordStore(LOG_PATH), DailyAverageStore(DAILY_LOG_PATH)
+
+
 def get_records() -> list[dict]:
-    real = load_records(LOG_PATH)
+    """DETERMINISTIC: load durable history; fallback uses fixtures only when no recordings exist."""
+    store, _ = _record_store()
+    real = store.read_all()
     return real if real else build_mock_log()
 
 
@@ -529,8 +544,7 @@ def run_analysis(sv_bytes: bytes, cs_bytes: bytes):
             "sample_rate_hz": combined_sound.sampling_frequency,
         }
 
-        store = JsonlRecordStore(LOG_PATH)
-        daily_store = DailyAverageStore(DAILY_LOG_PATH)
+        store, daily_store = _record_store()
         record = log_session(store, sample_meta, parameters, indices, norms, daily_store=daily_store)
         mark_item_complete(NEW_RECORDING)
 
@@ -539,6 +553,14 @@ def run_analysis(sv_bytes: bytes, cs_bytes: bytes):
         reset_capture_state("sv", "cs")
         st.session_state.pop("sv_bytes", None)
         st.session_state.capture_step = 3
+        st.rerun()
+    except SupabaseStorageError:
+        # A configured server store must not leak backend responses or traces into the UI.
+        st.session_state["last_error"] = (
+            "The secure voice-history service could not save this analysis. "
+            "Please try again after checking its configuration."
+        )
+        clear_accepted("cs")
         st.rerun()
     except Exception as exc:
         st.session_state["last_error"] = "".join(

@@ -1,9 +1,8 @@
 """Structured result logging.
 
-Phase 1: append-only local JSON Lines file (no cloud auth needed). The
-`RecordStore` interface is intentionally minimal (`append(record)`) so a
-SQLite/Postgres backend can be swapped in later (Phase 2) without touching
-analysis code -- construct a different store and pass it to `log_session`.
+The local JSON Lines implementation remains available for offline standalone
+use. The `RecordStore` interface also supports the server-side Supabase store
+without coupling analysis code to a particular persistence backend.
 """
 from __future__ import annotations
 
@@ -17,6 +16,7 @@ from storage.daily_averages import DailyAverageStore
 
 class RecordStore(Protocol):
     def append(self, record: dict) -> None: ...
+    def read_all(self) -> list[dict]: ...
 
 
 class JsonlRecordStore:

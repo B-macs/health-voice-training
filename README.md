@@ -3,7 +3,7 @@
 Captures a sustained vowel [a:] (~3s) and a German continuous-speech passage
 via browser mic or `.wav` upload, runs the existing headless acoustic
 analysis (14 single parameters + AVQI + ABI, 0-10 each) unchanged, logs one
-structured JSON record per session to `voice_log.jsonl`, and presents the
+structured record per session, and presents the
 results as a dark, Oura-style dashboard: a composite "Stimm-Score" hero
 ring, a 30-day trend, an acoustic-insights list, and the hexagonal Voice
 Profile radar. No AI. A raw-data "QA (Debug)" expander is available for
@@ -41,15 +41,16 @@ any DSP or touch the AVQI/ABI computation.
   `goodness`, color from the actual `norms.py` `in_range` boolean -- position
   and pass/fail are deliberately decoupled), the hexagonal radar, and the
   trend/area chart.
-- **`ui/aggregation.py`** -- Day/Week/Month rollups over `voice_log.jsonl`.
+- **`ui/aggregation.py`** -- Day/Week/Month rollups over the configured
+  voice-history store.
   Every record is immutable and keyed by its ISO-8601 timestamp already;
   the ISO year-week and calendar year-month are derived here, on read, with
   no schema change. The norm used to flag each record is read from that
   record's own `norms` field, not recomputed from the current config, so a
   threshold line stays correct even if norms are re-tuned later.
 - **`ui/mock_data.py`** -- lets the dashboard be built/previewed with zero
-  real sessions logged yet. `app.py`'s `get_records()` calls
-  `ui.aggregation.load_records("voice_log.jsonl")` first and only falls
+  real sessions logged yet. `app.py`'s `get_records()` calls the configured
+  record store first and only falls
   back to the mock fixture if that's empty -- **once you've logged one real
   session, the mock data stops being used automatically**, no flag to flip.
   The mock "current" session uses Brian McAuliffe's real values from the
@@ -111,6 +112,45 @@ Click **Neue Aufnahme** to record/upload both samples, then
 **Analysieren & protokollieren**; you're returned to the dashboard showing
 that real session. Check the **DETAILS** tab's "QA (Debug)" expander to see
 the raw logged JSON.
+
+## Persistent Streamlit Cloud history (Supabase)
+
+Without configuration, Voxplot keeps its append-only history in the local,
+gitignored `voice_log.jsonl` file. For Streamlit Cloud, configure the
+server-side Supabase store through Streamlit secrets -- never commit these
+values or expose the secret key in browser code:
+
+```toml
+[voxplot_supabase]
+url = "https://your-project-ref.supabase.co"
+secret_key = "sb_secret_..."
+```
+
+The Streamlit deployment must be **private or invite-only** before enabling
+this store. The server-side secret has database access for this one-person
+app, so a public deployment without user authentication could otherwise let
+visitors view or add to the shared history. Add the same secret block in
+Streamlit Cloud's **Settings → Secrets**; the local `.streamlit/secrets.toml`
+file is intentionally gitignored and is not deployed.
+
+The tracked migration at
+`supabase/migrations/20260714000000_create_voice_sessions.sql` creates the
+append-only `voice_sessions` table. It stores calculated metrics and sample
+metadata only; raw audio is never retained. It enables RLS, gives no browser
+role access, and grants the server-only `service_role` just `SELECT` and
+`INSERT` access. Confirm that the Supabase GitHub integration has deployed
+this migration for the `main` branch before using the app or importer.
+
+To import pre-existing local history once the migration has been applied,
+run the idempotent importer with explicit paths. It is safe to rerun: each
+record has a deterministic hash and duplicates are ignored.
+
+```powershell
+python scripts/migrate_voice_history.py `
+  --secrets "C:\path\to\Health_project\.streamlit\secrets.toml" `
+  "C:\path\to\Voxplot\voice_log.jsonl" `
+  "C:\path\to\Health_project\voice_training\voxplot\voice_log.jsonl"
+```
 
 ## Running tests
 
