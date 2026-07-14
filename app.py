@@ -67,19 +67,18 @@ def md(html: str) -> None:
     st.markdown(flatten(html), unsafe_allow_html=True)
 
 
-st.set_page_config(page_title=t("page_title"), layout="centered", initial_sidebar_state="collapsed")
-inject_css(st)
-
-if "active_tab" not in st.session_state:
-    st.session_state.active_tab = "voice_analysis"
-if "view" not in st.session_state:
-    st.session_state.view = "dashboard"
-if "capture_step" not in st.session_state:
-    st.session_state.capture_step = 1
-if "trend_granularity" not in st.session_state:
-    st.session_state.trend_granularity = "day"
-if "trend_metric" not in st.session_state:
-    st.session_state.trend_metric = "composite"
+def _ensure_session_state() -> None:
+    """Initialise Voxplot-only UI state for standalone and embedded renders."""
+    if "active_tab" not in st.session_state:
+        st.session_state.active_tab = "voice_analysis"
+    if "view" not in st.session_state:
+        st.session_state.view = "dashboard"
+    if "capture_step" not in st.session_state:
+        st.session_state.capture_step = 1
+    if "trend_granularity" not in st.session_state:
+        st.session_state.trend_granularity = "day"
+    if "trend_metric" not in st.session_state:
+        st.session_state.trend_metric = "composite"
 
 
 def get_records() -> list[dict]:
@@ -553,19 +552,30 @@ def run_analysis(sv_bytes: bytes, cs_bytes: bytes):
 # Main
 # ===========================================================================
 
-if st.session_state.view == "capture":
-    render_capture_flow()
-elif st.session_state.view == "activity":
-    render_activity_flow()
-else:
-    render_header()
-    render_tab_bar()
+def render(*, embedded: bool = False) -> None:
+    """Render Voxplot standalone or inside the Health Voice Training route."""
+    if not embedded:
+        st.set_page_config(page_title=t("page_title"), layout="centered", initial_sidebar_state="collapsed")
+    inject_css(st)
+    _ensure_session_state()
 
-    records = get_records()
+    if st.session_state.view == "capture":
+        render_capture_flow()
+    elif st.session_state.view == "activity":
+        render_activity_flow()
+    else:
+        render_header()
+        render_tab_bar()
 
-    if st.session_state.active_tab == "training":
-        render_training_tab()
-    elif st.session_state.active_tab == "voice_analysis":
-        render_voice_analysis_tab(records)
-    elif st.session_state.active_tab == "details":
-        render_details_tab(records)
+        records = get_records()
+
+        if st.session_state.active_tab == "training":
+            render_training_tab()
+        elif st.session_state.active_tab == "voice_analysis":
+            render_voice_analysis_tab(records)
+        elif st.session_state.active_tab == "details":
+            render_details_tab(records)
+
+
+if __name__ == "__main__":
+    render()
