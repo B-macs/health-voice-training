@@ -36,6 +36,32 @@ Voice Quality scoring, provenance, or historical comparability. Brief Voice
 Recovery Break remains quiet-rest-first: its single optional closing sentence
 is not expanded into a paragraph.
 
+### Activity-authoring rule: spoken practice
+
+This is a required part of the Activity authoring template. When a new card
+asks the user to speak connected words, phrases, sentences, or a reading task,
+attach a purpose-selected practice paragraph to that exact `ActivityStep`.
+Do not leave the user to invent speech material. A vowel, hum, isolated
+consonant, glide, or quiet-rest activity does not need a paragraph unless it
+explicitly transitions into connected speech.
+
+Choose the paragraph for the activity's stated target, and document the
+reason with the new card:
+
+| Target | Paragraph design | Required rationale |
+| --- | --- | --- |
+| Articulation / speech clarity | A short consonant-rich or tongue-twister-style paragraph, used slowly at an easy volume | Name the target sounds or articulation pattern; tongue twisters increase tongue/lip/jaw coordination, not vocal-fold effort. |
+| Resonance, pacing, carryover, or breath-voice coordination | Natural everyday sentences with clear phrase boundaries | Explain how natural pauses and wording support the intended easy voice pattern. |
+| Gentle voice use or recovery transition | Low-effort, non-projection sentences; retain quiet rest as the priority | State the comfort/stop condition and do not make the paragraph mandatory if speaking is only optional. |
+
+Keep a supplied paragraph in `ANALYSIS_LANGUAGE`, short enough for one easy
+sentence per exhale and natural pauses, and distinct from the versioned
+recording-capture passage. Never frame a tongue twister or other text as a
+way to force loudness, range, or vocal-fold effort. Add the paragraph via
+`_steps(..., speech_paragraph=..., paragraph_step=...)` so it appears at the
+speaking instruction and throughout the timer; record its wording and purpose
+in this catalogue or the changelog when adding the card.
+
 | Additional library activity | Maximum duration |
 | --- | --- |
 | Supported Voice Reset | 2 min |

@@ -31,6 +31,11 @@ See PLAN.md for the full architecture/gate status.
   versioned recording-capture passage, so Voice Quality scoring and recording
   comparability remain unchanged. The quiet-rest-first recovery card remains
   intentionally limited to its optional single closing sentence.
+- **Future activity-authoring rule.** Any connected-speech card must supply a
+  purpose-selected paragraph at its speaking step and document why the text
+  fits the target. Tongue-twister-style text is only for low-effort
+  articulation precision; it is not a way to force vocal-fold effort,
+  loudness, or range.
 - **Patient-profile and recording-quality guardrails.** New cards allow a
   supported chair or easy neutral standing position, avoid a held
   posture-correction cue, and tell the user to change position rather than

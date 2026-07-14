@@ -70,9 +70,9 @@ def _steps(
     "N rounds" is guidance the app can't back up. Say "until the timer runs
     out" (or a concrete duration) instead; the regex below rejects the old
     phrasing so a new activity can't reintroduce it by accident. A connected-
-    speech activity may attach one supplied practice paragraph to one of its
-    four explanation steps; this keeps the text visible during that practice
-    without placing it on vowel, hum, or recovery activities."""
+    speech activity must attach one purpose-selected practice paragraph to one
+    of its four explanation steps; this keeps the text visible during that
+    practice without placing it on vowel, hum, or quiet-rest activities."""
     if len(instructions) != 4:
         raise ValueError("Screen A is designed for exactly 4 steps per activity")
     if (speech_paragraph is None) != (paragraph_step is None):
