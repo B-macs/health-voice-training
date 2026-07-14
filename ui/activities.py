@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from html import escape
 
 import streamlit as st
 
@@ -55,14 +56,29 @@ def _md(html: str) -> None:
     st.markdown(flatten(html), unsafe_allow_html=True)
 
 
+# DETERMINISTIC: renders only supplied static practice text; a missing paragraph leaves non-speech activities unchanged.
+def _render_practice_paragraph(paragraph: str | None) -> None:
+    if not paragraph:
+        return
+    _md(f"""
+        <div class="act-practice-paragraph">
+          <div class="act-practice-paragraph-title">{escape(t("activity_practice_paragraph_title"))}</div>
+          <div class="act-practice-paragraph-copy">{escape(paragraph)}</div>
+          <div class="act-practice-paragraph-hint">{escape(t("activity_practice_paragraph_hint"))}</div>
+        </div>
+        """)
+
+
 @dataclass
 class ActivityStep:
     """One explanation-screen step. `instruction` may contain a literal
     "{n}" placeholder (filled with the 1-based step number) -- real
     instruction text won't use it, and .format() is a no-op when it's
-    absent, so the same rendering code handles both."""
+    absent, so the same rendering code handles both. `speech_paragraph` is
+    optional text supplied only on a connected-speech step."""
     instruction: str
     illustration: str
+    speech_paragraph: str | None = None
 
 
 @dataclass
@@ -151,6 +167,7 @@ def render_activity_explanation(activity: Activity) -> None:
     )
     _md(f'<div class="act-step-dots">{dots}</div>')
     _md(f'<div class="act-instruction">{step.instruction.format(n=step_idx + 1)}</div>')
+    _render_practice_paragraph(step.speech_paragraph)
 
     st.write("")
     with st.container(key="act_continue_btn"):
@@ -215,6 +232,9 @@ def render_activity_timer(activity: Activity) -> None:
         <div class="act-timer-reminder-heading">{t('activity_timer_reminder_heading')}</div>
         <div class="act-timer-instructions">{reminder_html}</div>
         """)
+
+    speech_paragraph = next((step.speech_paragraph for step in activity.steps if step.speech_paragraph), None)
+    _render_practice_paragraph(speech_paragraph)
 
     _render_timer_clock(activity)
 

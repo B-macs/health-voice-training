@@ -430,6 +430,10 @@ div[class*="st-key-act_illustration_"] img {{ border-radius: 16px; width: 100%; 
 .act-dot {{ width: 7px; height: 7px; border-radius: 999px; background: rgba(255,255,255,0.18); transition: all 0.2s ease; }}
 .act-dot-active {{ background: {COLORS['streak_amber']}; width: 18px; }}
 .act-instruction {{ font-size: 1.1rem; font-weight: 700; color: {COLORS['text']}; text-align: center; line-height: 1.55; margin: 0 0.5rem; }}
+.act-practice-paragraph {{ background: {COLORS['card']}; border: 1px solid {COLORS['card_border']}; border-left: 3px solid {COLORS['streak_amber']}; border-radius: 14px; padding: 0.9rem 1rem; margin: 1rem 0 0.4rem; }}
+.act-practice-paragraph-title {{ color: {COLORS['streak_amber']}; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 0.45rem; }}
+.act-practice-paragraph-copy {{ color: {COLORS['text']}; font-size: 0.98rem; line-height: 1.6; }}
+.act-practice-paragraph-hint {{ color: {COLORS['muted']}; font-size: 0.78rem; line-height: 1.45; margin-top: 0.65rem; }}
 div[class*="st-key-act_continue_btn"] button[kind="primary"],
 div[class*="st-key-act_done_btn"] button[kind="primary"] {{
     background: {COLORS['streak_amber']} !important;

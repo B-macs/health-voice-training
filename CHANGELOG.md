@@ -24,6 +24,13 @@ See PLAN.md for the full architecture/gate status.
   XP, streak, progress history, or auto-starting the next planned card. Only
   an explicitly plan-launched card can call `mark_item_complete`; that method
   also rejects an activity id not assigned to the current plan day.
+- **Supplied connected-speech text.** Reading, phrase, articulation, chant,
+  and conversational carryover cards now show a stable three-sentence
+  practice paragraph during the relevant explanation step and timer. It is a
+  separate training prompt selected by analysis language, not the short,
+  versioned recording-capture passage, so Voice Quality scoring and recording
+  comparability remain unchanged. The quiet-rest-first recovery card remains
+  intentionally limited to its optional single closing sentence.
 - **Patient-profile and recording-quality guardrails.** New cards allow a
   supported chair or easy neutral standing position, avoid a held
   posture-correction cue, and tell the user to change position rather than

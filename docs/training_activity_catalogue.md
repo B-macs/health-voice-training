@@ -20,6 +20,22 @@ complete. `EXERCISE_LIBRARY` is the single source of truth: a later plan can
 mix and match its stable activity ids without creating a second catalogue.
 `NEW_RECORDING` stays a daily-plan capture step rather than a library item.
 
+### Supplied connected-speech paragraph
+
+Seven cards now display one stable, three-sentence paragraph exactly where
+connected speech is requested: Pulmo-Train Reading Carryover, Twang
+Brightness, Resonant Phrase Carryover, Gentle Phrase Pacing, Easy
+Articulation Practice, Chant-to-Speech Bridge, and Cool-Down & Carryover
+Check. Use one sentence per easy exhale and pause naturally at full stops;
+the twang and chant cards intentionally use the first sentence only.
+
+The paragraph follows `ANALYSIS_LANGUAGE` (currently German) so practice has
+consistent language, but it is deliberately separate from the short,
+versioned recording-capture passage. It does not change recording protocol,
+Voice Quality scoring, provenance, or historical comparability. Brief Voice
+Recovery Break remains quiet-rest-first: its single optional closing sentence
+is not expanded into a paragraph.
+
 | Additional library activity | Maximum duration |
 | --- | --- |
 | Supported Voice Reset | 2 min |

@@ -52,20 +52,35 @@ from __future__ import annotations
 
 import re
 
+from config import speech_practice_paragraph
 from ui.activities import Activity, ActivityStep, SIGN_ILLUSTRATIONS
 
 _REP_COUNT_RE = re.compile(r"\d+(?:-\d+)?\s*(?:times|rounds)\b", re.IGNORECASE)
+SPEECH_PRACTICE_PARAGRAPH = speech_practice_paragraph()
 
 
-def _steps(*instructions: str) -> list[ActivityStep]:
+def _steps(
+    *instructions: str,
+    speech_paragraph: str | None = None,
+    paragraph_step: int | None = None,
+) -> list[ActivityStep]:
     """Every Activity's instructions must guide the user by time, not a rep
     count -- Screen B (ui/activities.py) only ever runs a plain countdown,
     it never counts reps for the user, so telling them to do "N times" or
     "N rounds" is guidance the app can't back up. Say "until the timer runs
     out" (or a concrete duration) instead; the regex below rejects the old
-    phrasing so a new activity can't reintroduce it by accident."""
+    phrasing so a new activity can't reintroduce it by accident. A connected-
+    speech activity may attach one supplied practice paragraph to one of its
+    four explanation steps; this keeps the text visible during that practice
+    without placing it on vowel, hum, or recovery activities."""
     if len(instructions) != 4:
         raise ValueError("Screen A is designed for exactly 4 steps per activity")
+    if (speech_paragraph is None) != (paragraph_step is None):
+        raise ValueError("speech_paragraph and paragraph_step must be provided together")
+    if speech_paragraph is not None and not speech_paragraph.strip():
+        raise ValueError("speech_paragraph must not be empty")
+    if paragraph_step is not None and paragraph_step not in range(1, len(instructions) + 1):
+        raise ValueError("paragraph_step must select one of the four Activity steps")
     for text in instructions:
         if _REP_COUNT_RE.search(text):
             raise ValueError(
@@ -73,7 +88,11 @@ def _steps(*instructions: str) -> list[ActivityStep]:
                 '(say "until the timer runs out" instead of "N times"/"N rounds")'
             )
     return [
-        ActivityStep(instruction=text, illustration=SIGN_ILLUSTRATIONS[i])
+        ActivityStep(
+            instruction=text,
+            illustration=SIGN_ILLUSTRATIONS[i],
+            speech_paragraph=speech_paragraph if paragraph_step == i + 1 else None,
+        )
         for i, text in enumerate(instructions)
     ]
 
@@ -125,10 +144,12 @@ EXERCISE_LIBRARY: list[Activity] = [
         category="SOVT · Pulmo-Train",
         timer_seconds=270,
         steps=_steps(
-            "Seal the tube gently in your lips and read your usual passage aloud through it at a comfortable pitch and loudness.",
+            "Seal the tube gently in your lips and read the supplied practice paragraph aloud through it at a comfortable pitch and loudness.",
             "Focus on steady airflow and an even tone rather than volume.",
-            "Remove the tube and immediately re-read the same passage without it.",
+            "Remove the tube and immediately re-read the same paragraph without it.",
             "Try to carry over the same easy, connected feeling you had with the tube in.",
+            speech_paragraph=SPEECH_PRACTICE_PARAGRAPH,
+            paragraph_step=1,
         ),
     ),
     Activity(
@@ -205,8 +226,10 @@ EXERCISE_LIBRARY: list[Activity] = [
         steps=_steps(
             "Say an exaggerated, nasal 'nyah-nyah-nyah', like a cartoon witch or a duck.",
             "Notice the bright, forward, slightly nasal buzz of that sound.",
-            "Carry a touch of that same brightness into one sentence of your reading passage.",
+            "Carry a touch of that same brightness into the first sentence of the supplied practice paragraph.",
             "Keep repeating until the timer runs out, without pushing or straining for volume.",
+            speech_paragraph=SPEECH_PRACTICE_PARAGRAPH,
+            paragraph_step=3,
         ),
     ),
     Activity(
@@ -281,10 +304,12 @@ EXERCISE_LIBRARY: list[Activity] = [
         category="Functional Resonance",
         timer_seconds=180,
         steps=_steps(
-            "Use a supported chair with your feet supported, or an easy neutral standing position, and choose a short everyday phrase.",
-            "Begin with a soft 'mmm', then let it lead directly into the phrase.",
+            "Use a supported chair with your feet supported, or an easy neutral standing position, and use the supplied practice paragraph.",
+            "Begin with a soft 'mmm', then let it lead directly into each sentence.",
             "Use a light, normal speaking volume; do not whisper, call, or push for extra volume.",
             "Pause and reset between phrases until the timer runs out, changing position or stopping if effort or back symptoms increase.",
+            speech_paragraph=SPEECH_PRACTICE_PARAGRAPH,
+            paragraph_step=1,
         ),
     ),
     Activity(
@@ -307,10 +332,12 @@ EXERCISE_LIBRARY: list[Activity] = [
         category="Speech Coordination",
         timer_seconds=180,
         steps=_steps(
-            "Use a supported chair with your feet supported, or an easy neutral standing position, with a short passage or everyday phrases ready.",
+            "Use a supported chair with your feet supported, or an easy neutral standing position, with the supplied practice paragraph ready.",
             "Say one short phrase on an easy exhale, then pause at a natural phrase end before breathing again.",
             "Let the next breath be quiet and unforced; do not rush to finish the whole sentence on one breath.",
             "Continue the speak-and-pause pattern until the timer runs out, changing position or stopping if breathlessness, strain, or back symptoms increase.",
+            speech_paragraph=SPEECH_PRACTICE_PARAGRAPH,
+            paragraph_step=1,
         ),
     ),
     Activity(
@@ -320,10 +347,12 @@ EXERCISE_LIBRARY: list[Activity] = [
         category="Speech Clarity",
         timer_seconds=180,
         steps=_steps(
-            "Use a supported chair with your feet supported, or an easy neutral standing position, and choose a short familiar passage.",
+            "Use a supported chair with your feet supported, or an easy neutral standing position, and use the supplied practice paragraph.",
             "Speak slowly and clearly, letting your lips and tongue do the work rather than getting louder.",
             "Keep pitch and volume comfortable; reduce the precision if your jaw or throat starts to catch or tire.",
             "Pause and reset between phrases until the timer runs out, with no whispering or forced projection.",
+            speech_paragraph=SPEECH_PRACTICE_PARAGRAPH,
+            paragraph_step=1,
         ),
     ),
     Activity(
@@ -333,10 +362,12 @@ EXERCISE_LIBRARY: list[Activity] = [
         category="Functional Carryover",
         timer_seconds=180,
         steps=_steps(
-            "Use a supported chair with your feet supported, or an easy neutral standing position, and choose a short everyday phrase.",
-            "Say the phrase on one comfortable, gentle note, like a short chant.",
-            "Then say the same phrase in natural speech while keeping the same low-effort feeling.",
+            "Use a supported chair with your feet supported, or an easy neutral standing position, and use the first sentence of the supplied practice paragraph.",
+            "Say that sentence on one comfortable, gentle note, like a short chant.",
+            "Then say the same sentence in natural speech while keeping the same low-effort feeling.",
             "Keep alternating chant and natural speech until the timer runs out, and stop if you notice increasing strain, hoarseness, or back discomfort.",
+            speech_paragraph=SPEECH_PRACTICE_PARAGRAPH,
+            paragraph_step=1,
         ),
     ),
     Activity(
@@ -361,8 +392,10 @@ EXERCISE_LIBRARY: list[Activity] = [
         steps=_steps(
             "Take three slow, relaxed breaths.",
             "Hum gently for about 10 seconds at a comfortable pitch.",
-            "Say a few sentences of normal conversation, paying attention to how your voice feels.",
+            "Read the supplied practice paragraph as normal conversation, paying attention to how your voice feels.",
             "Compare that feeling to how your voice felt at the very start of this session.",
+            speech_paragraph=SPEECH_PRACTICE_PARAGRAPH,
+            paragraph_step=3,
         ),
     ),
 ]

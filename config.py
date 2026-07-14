@@ -42,6 +42,21 @@ reference VOXplot desktop app's own excerpt and its ~10s fixed recording
 window (see ui/capture.py) -- the full multi-sentence fable takes 30-45s to
 read, far longer than that window."""
 
+# Separate from READING_PASSAGES: this longer text is a low-effort practice
+# prompt for connected-speech activities, never an analysis capture protocol.
+SPEECH_PRACTICE_PARAGRAPHS = {
+    "de": (
+        "Am Morgen gehe ich langsam durch den Park und höre die Vögel in den Bäumen. "
+        "Danach kaufe ich frisches Brot und bespreche den Tag in ruhiger, normaler Lautstärke. "
+        "Zu Hause trinke ich ein Glas Wasser und mache eine kurze Pause."
+    ),
+    "en": (
+        "On a quiet morning, I walk slowly through the park and hear birds in the trees. "
+        "Afterwards, I buy fresh bread and discuss the day at a calm, everyday volume. "
+        "At home, I drink a glass of water and take a short break."
+    ),
+}
+
 UI_STRINGS = {
     "de": {
         "page_title": "Voxplot Aufnahme",
@@ -172,6 +187,8 @@ UI_STRINGS = {
         # results (C) -- see ui/activities.py ---
         "activity_continue_button": "Weiter",
         "activity_timer_reminder_heading": "Zur Erinnerung",
+        "activity_practice_paragraph_title": "Übungstext",
+        "activity_practice_paragraph_hint": "Sprich einen Satz pro ruhigem Atemzug und mache an jedem Satzende eine natürliche Pause.",
         "activity_timer_label": "Verbleibende Zeit",
         "activity_results_tab": "ERGEBNISSE",
         "activity_audios_tab": "AUDIOS",
@@ -309,6 +326,8 @@ UI_STRINGS = {
         # results (C) -- see ui/activities.py ---
         "activity_continue_button": "Continue",
         "activity_timer_reminder_heading": "As a reminder",
+        "activity_practice_paragraph_title": "Practice paragraph",
+        "activity_practice_paragraph_hint": "Use one sentence per easy exhale and pause naturally at each full stop.",
         "activity_timer_label": "Time remaining",
         "activity_results_tab": "RESULTS",
         "activity_audios_tab": "AUDIOS",
@@ -374,6 +393,11 @@ def t(key: str, language: str = UI_LANGUAGE) -> str:
 
 def reading_passage(language: str = ANALYSIS_LANGUAGE) -> str:
     return READING_PASSAGES[language]
+
+
+# DETERMINISTIC: returns the stable connected-speech practice text; unsupported analysis languages fall back to German.
+def speech_practice_paragraph(language: str = ANALYSIS_LANGUAGE) -> str:
+    return SPEECH_PRACTICE_PARAGRAPHS.get(language, SPEECH_PRACTICE_PARAGRAPHS["de"])
 
 
 def metric_label(key: str) -> str:

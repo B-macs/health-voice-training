@@ -11,8 +11,11 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import pytest
+
+from config import speech_practice_paragraph
 from ui.activities import is_plan_activity_launch
-from ui.exercise_library import EXERCISE_LIBRARY
+from ui.exercise_library import EXERCISE_LIBRARY, _steps
 from ui.training_plan import (
     NEW_RECORDING, TRAINING_PLAN, mark_item_complete, plan_day_minutes,
     sync_plan_to_today,
@@ -42,6 +45,36 @@ def test_every_day_stays_under_the_fifteen_minute_cap():
     for day in TRAINING_PLAN:
         minutes = plan_day_minutes(day)
         assert minutes <= 15, f"Day {day.day_number} is {minutes} min, over the 15-min cap"
+
+
+def test_connected_speech_activities_use_the_supplied_practice_paragraph():
+    paragraph_steps = {
+        activity.id: [step for step in activity.steps if step.speech_paragraph]
+        for activity in EXERCISE_LIBRARY
+    }
+    paragraph_steps = {activity_id: steps for activity_id, steps in paragraph_steps.items() if steps}
+
+    assert set(paragraph_steps) == {
+        "pulmo_reading_carryover",
+        "twang_brightness",
+        "resonant_phrase_carryover",
+        "gentle_phrase_pacing",
+        "easy_articulation",
+        "chant_to_speech_bridge",
+        "cooldown_carryover",
+    }
+    for steps in paragraph_steps.values():
+        assert len(steps) == 1
+        assert steps[0].speech_paragraph == speech_practice_paragraph()
+
+
+def test_steps_reject_incomplete_or_invalid_paragraph_metadata():
+    instructions = ("one", "two", "three", "four")
+
+    with pytest.raises(ValueError, match="provided together"):
+        _steps(*instructions, speech_paragraph="Practice text")
+    with pytest.raises(ValueError, match="paragraph_step"):
+        _steps(*instructions, speech_paragraph="Practice text", paragraph_step=5)
 
 
 def test_plan_references_catalogue_activities_and_new_cards_remain_library_only():
