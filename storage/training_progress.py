@@ -1,4 +1,4 @@
-"""Persisted progress through the 20-day training plan (see
+"""Persisted progress through the 10-day baseline training plan (see
 ui/training_plan.py) -- which day the user is on, which of that day's
 items are done so far, `current_day_date` (the calendar date the active
 day_index started on), and `history` (a calendar-date -> "complete"/

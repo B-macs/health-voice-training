@@ -4,7 +4,7 @@ Root-cause notes for fixes made while validating against the Saarbruecken
 Voice Database (SVD) and the Perceptual Voice Qualities Database (VQD).
 See PLAN.md for the full architecture/gate status.
 
-## 2026-07-14 - low-load voice-training follow-on
+## 2026-07-14 - separate voice-training library
 
 - **Ten new activity cards, no new renderer or assets.** Added Supported Voice
   Reset, Lip Trill Ease, Voiced /v/ Flow, Nasal Resonance Ladder, Resonant
@@ -13,11 +13,17 @@ See PLAN.md for the full architecture/gate status.
   Break. Each is an existing four-step countdown Activity, so it uses the
   same explanation, timer, results, and completion template as the original
   pool.
-- **Original baseline preserved.** Days 1-10 are unchanged. Days 11-20 pair
-  one new, two-to-three-minute low-effort activity with a familiar exercise,
-  daily recording, and cool-down. The upper-bound duration stays at or below
-  15 minutes each day. Extending rather than rewriting the baseline lets a
-  persisted completed 10-day plan continue at Day 11.
+- **Separate library; original baseline restored.** The daily plan remains
+  Days 1-10 and keeps its original 12-card schedule. All 22 cards (the 12
+  original cards plus the ten above) are now available in a selectable
+  Training Library, including after a daily plan is complete or locked until
+  tomorrow. Future plans can mix and match these stable catalogue ids rather
+  than duplicating activity definitions.
+- **Completion isolation.** A library launch is explicitly marked as
+  optional: finishing it returns to Training without changing the daily plan,
+  XP, streak, progress history, or auto-starting the next planned card. Only
+  an explicitly plan-launched card can call `mark_item_complete`; that method
+  also rejects an activity id not assigned to the current plan day.
 - **Patient-profile and recording-quality guardrails.** New cards allow a
   supported chair or easy neutral standing position, avoid a held
   posture-correction cue, and tell the user to change position rather than

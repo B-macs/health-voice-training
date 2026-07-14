@@ -1,31 +1,23 @@
-"""The 20-day voice-training plan.
+"""The fixed 10-day voice-training baseline.
 
-Fixed, one-time schedule across ui/exercise_library.py's 22-exercise pool,
-built under two hard constraints: every day starts with a fresh voice
-recording (NEW_RECORDING, the existing standalone capture flow -- not
-one of the 22 Activity entries), and no day's total time -- recording
-included -- exceeds 15 minutes. Budget uses each exercise's own upper
-duration estimate plus RECORDING_MINUTES_ESTIMATE, so the real total is
-never more than what's checked here (see test_training_plan.py, which
-asserts every day in TRAINING_PLAN stays under the cap).
+The schedule uses the original 12 activities from ui/exercise_library.py's
+22-card catalogue. Every day starts with a fresh voice recording
+(NEW_RECORDING, the existing standalone capture flow -- not an Activity
+entry), and no day's total time -- recording included -- exceeds 15 minutes.
+Budget uses each exercise's upper duration estimate plus
+RECORDING_MINUTES_ESTIMATE, so the real total is never more than the cap
+checked in test_training_plan.py.
 
-Days 1-10 remain the original fixed baseline, not a rotating/repeating
-curriculum: each of the 4 Pulmo-Train exercises (the tool with a documented
-track record for this condition, see
-Investigation/01_Voice_Quality_Overview.html) appears 2-3 times across those
-10 days, the other 8 exercises appear at least once, and every day ends with
-the same short cool-down.
+This is a fixed 10-day baseline, not a rotating/repeating curriculum: each of
+the four Pulmo-Train exercises (the tool with a documented track record for
+this condition, see Investigation/01_Voice_Quality_Overview.html) appears
+2-3 times, the other eight baseline activities appear at least once, and each
+day ends with the same short cool-down.
 
-Days 11-20 are a user-requested low-load follow-on: each pairs one new,
-three-minutes-or-less activity with a familiar exercise and the same
-cool-down. This preserves a completed 10-day baseline in persisted progress
-and makes the new activities reachable for both current and already-complete
-plans. See docs/training_activity_catalogue.md for the clinical safety
-envelope and the reason the latest quality-limited recording does not drive
-score-based progression.
-
-After day 20, re-assess against the daily-recorded trend before designing a
-longer program -- see PlanProgress.is_complete.
+All 22 activities remain separately selectable in the Training Library. A
+future plan may mix and match those stable Activity ids, but library practice
+does not alter this baseline's completion state. After day 10, re-assess the
+daily-recorded trend before authoring a later plan.
 """
 from __future__ import annotations
 
@@ -41,7 +33,7 @@ RECORDING_MINUTES_ESTIMATE = 2.0
 
 @dataclass
 class PlanDay:
-    day_number: int  # 1-20, matches its position in TRAINING_PLAN
+    day_number: int  # 1-10, matches its position in TRAINING_PLAN
     activity_ids: list[str]  # NEW_RECORDING first, then EXERCISE_LIBRARY ids
 
 
@@ -56,16 +48,6 @@ TRAINING_PLAN: list[PlanDay] = [
     PlanDay(8, [NEW_RECORDING, "pulmo_reading_carryover", "vfe_sustained_i", "cooldown_carryover"]),
     PlanDay(9, [NEW_RECORDING, "pulmo_warmup_hum", "vfe_ascending_glide", "cooldown_carryover"]),
     PlanDay(10, [NEW_RECORDING, "pulmo_pitch_glides", "vfe_descending_glide", "cooldown_carryover"]),
-    PlanDay(11, [NEW_RECORDING, "supported_voice_reset", "pulmo_warmup_hum", "cooldown_carryover"]),
-    PlanDay(12, [NEW_RECORDING, "lip_trill_ease", "vfe_sustained_i", "cooldown_carryover"]),
-    PlanDay(13, [NEW_RECORDING, "voiced_v_flow", "pulmo_water_resistance", "cooldown_carryover"]),
-    PlanDay(14, [NEW_RECORDING, "nasal_resonance_ladder", "resonant_humming", "cooldown_carryover"]),
-    PlanDay(15, [NEW_RECORDING, "resonant_phrase_carryover", "pulmo_reading_carryover", "cooldown_carryover"]),
-    PlanDay(16, [NEW_RECORDING, "small_step_pitch_pattern", "pulmo_pitch_glides", "cooldown_carryover"]),
-    PlanDay(17, [NEW_RECORDING, "gentle_phrase_pacing", "breath_sz_ratio", "cooldown_carryover"]),
-    PlanDay(18, [NEW_RECORDING, "easy_articulation", "vfe_descending_glide", "cooldown_carryover"]),
-    PlanDay(19, [NEW_RECORDING, "chant_to_speech_bridge", "pulmo_warmup_hum", "cooldown_carryover"]),
-    PlanDay(20, [NEW_RECORDING, "voice_recovery_break", "resonant_humming", "cooldown_carryover"]),
 ]
 
 
@@ -131,9 +113,10 @@ def mark_item_complete(
     that date as "complete" in history, advances to the next day, and
     resets today's completion list -- persisted, so progress survives
     closing and reopening the app. No-op (returns state unchanged) once
-    the whole plan is already complete. Runs sync_plan_to_today first so a
-    click after a skipped day still lands on the right (rolled-forward)
-    day rather than completing a stale one.
+    the whole plan is already complete or when the id is not assigned to the
+    current plan day. Runs sync_plan_to_today first so a click after a skipped
+    day still lands on the right (rolled-forward) day rather than completing a
+    stale one.
 
     The newly-advanced day's `current_day_date` is set to *tomorrow*, not
     today -- once a day is done, no further training is required or even
@@ -149,9 +132,12 @@ def mark_item_complete(
     if day_index >= len(TRAINING_PLAN):
         return state
 
+    today_ids = set(TRAINING_PLAN[day_index].activity_ids)
+    if item_id not in today_ids:
+        return state
+
     completed = set(state["completed_today"])
     completed.add(item_id)
-    today_ids = set(TRAINING_PLAN[day_index].activity_ids)
 
     if today_ids <= completed:
         state["history"][state["current_day_date"]] = "complete"

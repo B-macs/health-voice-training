@@ -100,7 +100,13 @@ def _exit_to_plan() -> None:
     st.session_state.pop("activity_screen", None)
     st.session_state.pop("activity_explain_step", None)
     st.session_state.pop("activity_timer_start", None)
+    st.session_state.pop("activity_launch_source", None)
     st.rerun()
+
+
+# DETERMINISTIC: only an explicit daily-plan launch may change persisted plan progress; missing or unknown sources safely do not.
+def is_plan_activity_launch(source: str | None) -> bool:
+    return source == "plan"
 
 
 def _tube_fill_pct(phase_index: int, total_steps: int) -> float:
@@ -229,6 +235,9 @@ def render_activity_results(activity: Activity, metrics: list[ActivityMetric] | 
     # The only screen in the explain -> timer -> results flow where the
     # tube is full: every earlier screen renders it via _tube_fill_pct,
     # which by construction stays below 100% until this phase.
+    completion_subtext = "activity_complete_subtext" if is_plan_activity_launch(
+        st.session_state.get("activity_launch_source")
+    ) else "activity_library_complete_subtext"
     _md('<div class="act-progress-track"><div class="act-progress-fill" style="width:100.0%;"></div></div>')
     _md(f"""
         <div class="act-tabs">
@@ -241,7 +250,7 @@ def render_activity_results(activity: Activity, metrics: list[ActivityMetric] | 
         st.image("images/celebration.png", use_container_width=True)
 
     _md(f'<div class="act-results-heading">{t("activity_complete_heading")}</div>')
-    _md(f'<div class="act-results-subtext">{t("activity_complete_subtext")}</div>')
+    _md(f'<div class="act-results-subtext">{t(completion_subtext)}</div>')
 
     for metric in (metrics if metrics is not None else _placeholder_metrics()):
         _render_metric_row(metric)
@@ -249,6 +258,10 @@ def render_activity_results(activity: Activity, metrics: list[ActivityMetric] | 
     st.write("")
     with st.container(key="act_done_btn"):
         if st.button(t("activity_done_button"), key="act_done", type="primary", use_container_width=True):
+            if not is_plan_activity_launch(st.session_state.get("activity_launch_source")):
+                _exit_to_plan()
+                return
+
             from ui.training_plan import mark_item_complete, TRAINING_PLAN
             from storage.training_progress import TrainingProgressStore
 

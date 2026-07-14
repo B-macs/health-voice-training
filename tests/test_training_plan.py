@@ -1,7 +1,8 @@
-"""The 20-day plan: every day starts with a recording, no day
-exceeds the 15-minute cap, every exercise in the pool gets used, and
-completing a day's items advances to the next day with progress
-persisted (survives closing and reopening the app). Also covers
+"""The 10-day baseline and its separate 22-card activity library.
+
+Every plan day starts with a recording and stays under the 15-minute cap.
+All catalogue cards remain valid and separately selectable, while only a
+scheduled card may advance persisted baseline progress. Also covers
 sync_plan_to_today's calendar rollover: a day that passes without being
 fully completed is recorded "missed" and the plan steps forward on its
 own to keep pace with real time.
@@ -10,6 +11,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+from ui.activities import is_plan_activity_launch
 from ui.exercise_library import EXERCISE_LIBRARY
 from ui.training_plan import (
     NEW_RECORDING, TRAINING_PLAN, mark_item_complete, plan_day_minutes,
@@ -19,9 +21,9 @@ from storage.training_progress import TrainingProgressStore
 
 
 # DETERMINISTIC: validates static activity-card data and fails if the plan schema changes.
-def test_plan_has_twenty_days_and_valid_activity_templates():
-    assert len(TRAINING_PLAN) == 20
-    assert [d.day_number for d in TRAINING_PLAN] == list(range(1, 21))
+def test_plan_has_ten_days_and_valid_activity_templates():
+    assert len(TRAINING_PLAN) == 10
+    assert [d.day_number for d in TRAINING_PLAN] == list(range(1, 11))
     assert len(EXERCISE_LIBRARY) == 22
 
     activity_ids = [activity.id for activity in EXERCISE_LIBRARY]
@@ -42,14 +44,31 @@ def test_every_day_stays_under_the_fifteen_minute_cap():
         assert minutes <= 15, f"Day {day.day_number} is {minutes} min, over the 15-min cap"
 
 
-def test_every_pool_exercise_is_scheduled_at_least_once():
+def test_plan_references_catalogue_activities_and_new_cards_remain_library_only():
     scheduled = {aid for day in TRAINING_PLAN for aid in day.activity_ids}
     scheduled_activity_ids = scheduled - {NEW_RECORDING}
     pool_ids = {a.id for a in EXERCISE_LIBRARY}
-    missing = pool_ids - scheduled_activity_ids
-    assert not missing, f"exercises never scheduled: {missing}"
     unknown = scheduled_activity_ids - pool_ids
     assert not unknown, f"scheduled ids missing from exercise library: {unknown}"
+    library_only_ids = pool_ids - scheduled_activity_ids
+    assert library_only_ids == {
+        "supported_voice_reset",
+        "lip_trill_ease",
+        "voiced_v_flow",
+        "nasal_resonance_ladder",
+        "resonant_phrase_carryover",
+        "small_step_pitch_pattern",
+        "gentle_phrase_pacing",
+        "easy_articulation",
+        "chant_to_speech_bridge",
+        "voice_recovery_break",
+    }
+
+
+def test_only_explicit_plan_launches_can_update_daily_progress():
+    assert is_plan_activity_launch("plan") is True
+    assert is_plan_activity_launch("library") is False
+    assert is_plan_activity_launch(None) is False
 
 
 def test_completing_a_day_advances_to_the_next_and_resets(tmp_path):
@@ -74,6 +93,17 @@ def test_progress_persists_across_store_instances(tmp_path):
     reloaded = TrainingProgressStore(path).load()
     assert reloaded["completed_today"] == [NEW_RECORDING]
     assert reloaded["day_index"] == 0
+
+
+def test_library_only_item_is_not_recorded_as_daily_plan_progress(tmp_path):
+    store = TrainingProgressStore(str(tmp_path / "training_progress.json"))
+    day_one = date(2026, 1, 1)
+    before = sync_plan_to_today(store, today=day_one)
+
+    after = mark_item_complete("voice_recovery_break", store=store, today=day_one)
+
+    assert after == before
+    assert store.load() == before
 
 
 def test_plan_already_complete_is_a_noop(tmp_path):

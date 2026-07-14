@@ -4,30 +4,34 @@ Updated: 2026-07-14
 
 ## What changed
 
-The original Days 1-10 baseline is unchanged. Ten new activities are added as
-a low-load follow-on on Days 11-20, so a person whose persisted plan already
-finished Day 10 can continue rather than seeing an inaccessible exercise
-library. Every new item uses the existing Activity card template: title,
-duration, category, countdown seconds, and four illustrated explanation
-steps. No voice-analysis, Voice Quality scoring, recording protocol, or
-database behaviour changed.
+The original Days 1-10 baseline is unchanged. The Training tab now has a
+separate selectable **Training Library** containing all 22 Activity cards:
+the 12 original baseline activities and the ten additional activities below.
+Every item uses the existing Activity card template: title, duration,
+category, countdown seconds, and four illustrated explanation steps. No
+voice-analysis, Voice Quality scoring, recording protocol, or database
+behaviour changed.
 
-Each follow-on day still begins with a fresh recording and ends with the
-existing cool-down. The table uses upper duration bounds, including the
-two-minute recording estimate.
+Starting an activity from the library is optional standalone practice. It does
+not mark a daily-plan item complete, change XP, streak, history, or plan
+progress, and it never auto-starts the next plan card. The library remains
+available while the next plan day is locked and after the 10-day baseline is
+complete. `EXERCISE_LIBRARY` is the single source of truth: a later plan can
+mix and match its stable activity ids without creating a second catalogue.
+`NEW_RECORDING` stays a daily-plan capture step rather than a library item.
 
-| Day | New activity | Paired familiar activity | Maximum total |
-| --- | --- | --- | --- |
-| 11 | Supported Voice Reset | Pulmo-Train Warm-Up Hum | 9 min |
-| 12 | Lip Trill Ease | Sustained /i/ Warm-Up | 9 min |
-| 13 | Voiced /v/ Flow | Pulmo-Train Water Resistance | 10 min |
-| 14 | Nasal Resonance Ladder | Resonant Humming to Forward Placement | 9 min |
-| 15 | Resonant Phrase Carryover | Pulmo-Train Reading Carryover | 11 min |
-| 16 | Small-Step Pitch Pattern | Pulmo-Train Pitch Glides | 11 min |
-| 17 | Gentle Phrase Pacing | Breath-Voice Coordination (s/z) | 10 min |
-| 18 | Easy Articulation Practice | Descending Glide (Firm Closure) | 10 min |
-| 19 | Chant-to-Speech Bridge | Pulmo-Train Warm-Up Hum | 10 min |
-| 20 | Brief Voice Recovery Break | Resonant Humming to Forward Placement | 8 min |
+| Additional library activity | Maximum duration |
+| --- | --- |
+| Supported Voice Reset | 2 min |
+| Lip Trill Ease | 3 min |
+| Voiced /v/ Flow | 3 min |
+| Nasal Resonance Ladder | 3 min |
+| Resonant Phrase Carryover | 3 min |
+| Small-Step Pitch Pattern | 3 min |
+| Gentle Phrase Pacing | 3 min |
+| Easy Articulation Practice | 3 min |
+| Chant-to-Speech Bridge | 3 min |
+| Brief Voice Recovery Break | 2 min |
 
 ## Why these activities are deliberately gentle
 

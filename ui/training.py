@@ -4,7 +4,7 @@ weekly streak row, a "New Recording" button into the existing capture flow
 (unchanged -- see ui/capture.py), and a sequential "Daily plan" of cards
 (Next -> Complete, one at a time).
 
-The daily plan is driven by ui/training_plan.py's fixed 20-day schedule,
+The daily plan is driven by ui/training_plan.py's fixed 10-day baseline,
 persisted via storage/training_progress.py -- "today's plan" is whichever day
 the user has reached, always starting with a recording card (the existing
 capture flow, gated first in the sequence the same way any other card is)
@@ -13,7 +13,9 @@ Completing a day's last item advances to the next day automatically (see
 ui.training_plan.mark_item_complete), but that next day doesn't unlock
 same-day -- render_training_tab() shows a "come back tomorrow" card
 instead of a daily list until the calendar date actually changes. After
-day 20 it shows the whole-plan completion card instead.
+day 10 it shows the whole-plan completion card instead. A separate optional
+Activity Library exposes all 22 catalogue cards. Library practice uses the
+same activity flow but never changes daily-plan progress, XP, or the streak.
 
 XP is derived from *today's* completed items (len(completed_today) *
 XP_PER_ACTIVITY), so it resets when the plan advances to a new day --
@@ -181,6 +183,17 @@ def _render_recording_card(status: str) -> None:
                       use_container_width=True, disabled=True)
 
 
+# DETERMINISTIC: records an explicit launch source; unknown sources are treated as optional by the results screen and cannot change plan progress.
+def _launch_activity(activity_id: str, source: str) -> None:
+    st.session_state.view = "activity"
+    st.session_state.active_activity_id = activity_id
+    st.session_state.activity_screen = "explain"
+    st.session_state.activity_explain_step = 0
+    st.session_state.activity_launch_source = source
+    st.session_state.pop("activity_timer_start", None)
+    st.rerun()
+
+
 def _render_activity_card(activity: Activity, status: str, index: int) -> None:
     """Renders one activity card. Tapping "Start" (status == "next")
     launches the Screen A/C flow in ui/activities.py, which marks the
@@ -208,14 +221,56 @@ def _render_activity_card(activity: Activity, status: str, index: int) -> None:
         if status == "next":
             if st.button(t("training_start_button"), key=f"training_start_{activity.id}",
                          type="primary", use_container_width=True):
-                st.session_state.view = "activity"
-                st.session_state.active_activity_id = activity.id
-                st.session_state.activity_screen = "explain"
-                st.session_state.activity_explain_step = 0
-                st.rerun()
+                _launch_activity(activity.id, "plan")
         elif status == "upcoming":
             st.button(t("training_start_button"), key=f"training_start_{activity.id}",
                       use_container_width=True, disabled=True)
+
+
+# DETERMINISTIC: renders optional catalogue cards without plan status; an empty filter produces a clear empty-state message.
+def _render_library_activity_card(activity: Activity, index: int) -> None:
+    with st.container(key=f"card_training_library_{activity.id}"):
+        illustration_bg = _ILLUSTRATION_BGS[index % len(_ILLUSTRATION_BGS)]
+        _md(f"""
+            <div class="tr-card-body">
+              <div>
+                <div class="tr-card-title">{activity.title}</div>
+                <div class="tr-card-meta">
+                  <span>&#128337; {activity.duration}</span>
+                  <span>&#127919; {activity.category}</span>
+                </div>
+              </div>
+              <div class="tr-card-illustration" style="background:{illustration_bg}22;">&#128444;&#65039;</div>
+            </div>
+            """)
+        if st.button(t("training_library_start_button"), key=f"training_library_start_{activity.id}",
+                     type="primary", use_container_width=True):
+            _launch_activity(activity.id, "library")
+
+
+# DETERMINISTIC: lists every catalogue activity; when a category has no match, it shows an empty state instead of changing plan data.
+def _render_activity_library() -> None:
+    _md('<hr class="tr-divider" />')
+    library_title = f"\U0001F4DA {t('training_library_title')} · {len(EXERCISE_LIBRARY)}"
+    with st.expander(library_title, expanded=False):
+        st.caption(t("training_library_subtext"))
+        categories = [t("training_library_all_categories"), *dict.fromkeys(a.category for a in EXERCISE_LIBRARY)]
+        selected_category = st.selectbox(
+            t("training_library_filter_label"), categories, key="training_library_category",
+        )
+        activities = EXERCISE_LIBRARY if selected_category == categories[0] else [
+            activity for activity in EXERCISE_LIBRARY if activity.category == selected_category
+        ]
+        if not activities:
+            st.info(t("training_library_empty"))
+            return
+
+        previous_category = None
+        for index, activity in enumerate(activities):
+            if activity.category != previous_category:
+                st.caption(activity.category)
+                previous_category = activity.category
+            _render_library_activity_card(activity, index)
 
 
 def _render_plan_complete() -> None:
@@ -251,28 +306,27 @@ def render_training_tab() -> None:
 
     if day_index >= len(TRAINING_PLAN):
         _render_plan_complete()
-        return
-
-    if progress["current_day_date"] > date.today().isoformat():
+    elif progress["current_day_date"] > date.today().isoformat():
         _render_day_complete()
-        return
+    else:
+        _render_plan_header(day_index + 1)
 
-    _render_plan_header(day_index + 1)
+        today = TRAINING_PLAN[day_index]
+        completed_today = set(progress["completed_today"])
+        next_assigned = False
 
-    today = TRAINING_PLAN[day_index]
-    completed_today = set(progress["completed_today"])
-    next_assigned = False
+        for i, item_id in enumerate(today.activity_ids):
+            if item_id in completed_today:
+                status = "complete"
+            elif not next_assigned:
+                status = "next"
+                next_assigned = True
+            else:
+                status = "upcoming"
 
-    for i, item_id in enumerate(today.activity_ids):
-        if item_id in completed_today:
-            status = "complete"
-        elif not next_assigned:
-            status = "next"
-            next_assigned = True
-        else:
-            status = "upcoming"
+            if item_id == NEW_RECORDING:
+                _render_recording_card(status)
+            else:
+                _render_activity_card(_EXERCISE_BY_ID[item_id], status, i)
 
-        if item_id == NEW_RECORDING:
-            _render_recording_card(status)
-        else:
-            _render_activity_card(_EXERCISE_BY_ID[item_id], status, i)
+    _render_activity_library()
