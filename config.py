@@ -13,6 +13,20 @@ from __future__ import annotations
 UI_LANGUAGE = "en"
 ANALYSIS_LANGUAGE = "de"
 
+# Recordings are grouped by the user's local date, rather than the UTC date
+# of the Streamlit server. Change this explicitly before recording while
+# travelling; the chosen value is persisted with each new analysis.
+USER_TIMEZONE = "Europe/Berlin"
+
+# The established Voice Quality calculation is intentionally retained as a
+# personal acoustic-trend baseline. A version makes future presentation or
+# calibration changes auditable instead of silently reinterpreting history.
+VOICE_QUALITY_SCORING_VERSION = "voice_quality_v1"
+
+READING_PASSAGE_IDS = {
+    "de": "de_nordwind_und_sonne_opening_v1",
+}
+
 READING_PASSAGES = {
     "de": (
         "Einst stritten sich Nordwind und Sonne, wer von ihnen beiden wohl "
@@ -49,12 +63,12 @@ UI_STRINGS = {
         "analyze_button": "Analysieren & protokollieren",
         "success": "Aufgenommen und protokolliert.",
         "error": "Analyse fehlgeschlagen -- Details siehe QA (Debug) unten.",
-        "qa_expander": "QA (Debug) -- nicht für Endnutzer sichtbar",
+        "qa_expander": "Technischer Aufnahmebericht",
         "qa_no_run": "In dieser Sitzung wurde noch keine Analyse durchgeführt.",
 
         # --- Dashboard shell ---
         "app_name": "VOXplot",
-        "app_version": "v2.3.0",
+        "app_version": "v2.4.0",
         "tab_training": "TRAINING",
         "tab_voice_analysis": "STIMMANALYSE",
         "tab_details": "DETAILS",
@@ -75,9 +89,17 @@ UI_STRINGS = {
 
         # --- Hero / composite score ---
         "hero_title": "Stimmqualität",
-        "status_optimal": "Optimal",
-        "status_attention": "Beachten",
-        "status_concerning": "Auffällig",
+        "hero_subtitle": "Persönlicher akustischer Trend — keine Diagnose",
+        "hero_recipe": "50 % Gesamtindex · 50 % Behauchtheits-Schätzung",
+        "recording_quality_label": "Aufnahmequalität",
+        "quality_usable": "vergleichbar",
+        "quality_limited": "eingeschränkt",
+        "quality_not_usable": "nicht verwertbar",
+        "quality_legacy_unknown": "Altbestand / unbekannt",
+        "score_not_available": "Nicht bewertet",
+        "status_optimal": "Referenznah",
+        "status_attention": "Nahe Referenzgrenze",
+        "status_concerning": "Außerhalb Referenzbereich",
         "prev_week_label": "Vorwoche Ø",
         "prev_month_label": "Vormonat Ø",
 
@@ -100,9 +122,9 @@ UI_STRINGS = {
         "legend_current": "Aktuell",
         "legend_week_avg": "Wochenmittel",
         "legend_month_avg": "Monatsmittel",
-        "verdict_optimal": "Konstante Qualität. Ihre Stimmwerte sind optimal.",
-        "verdict_attention": "Leichte Abweichungen erkennbar. Einzelne Werte sollten beobachtet werden.",
-        "verdict_concerning": "Mehrere Werte liegen außerhalb der Norm. Eine logopädische Abklärung wird empfohlen.",
+        "verdict_optimal": "Persönlicher Trend liegt nahe den konfigurierten Referenzbereichen.",
+        "verdict_attention": "Einige Werte liegen nahe einer Referenzgrenze. Vergleichen Sie nur gleichartige, qualitätsgeprüfte Aufnahmen.",
+        "verdict_concerning": "Mehrere Werte liegen außerhalb der konfigurierten Referenzbereiche. Dies ist keine Diagnose.",
 
         # --- Details tab ---
         "details_group_hoarseness": "Heiserkeit",
@@ -113,14 +135,17 @@ UI_STRINGS = {
         "trend_toggle_week": "Woche",
         "trend_toggle_month": "Monat",
         "trend_select_metric": "Parameter auswählen",
-        "trend_norm_line": "Normgrenze",
+        "trend_norm_line": "Referenzgrenze",
         "no_history": "Noch keine früheren Sitzungen protokolliert.",
+        "trend_protocol_note": "Der Trend enthält nur Aufnahmen mit demselben Protokoll und derselben Bewertungslogik.",
 
         # --- Capture flow ---
         "capture_cancel": "Abbrechen",
         "capture_next": "Weiter",
         "capture_waveform_title": "Aufnahme-Wellenform",
-        "capture_trim_instruction": "Auswahl auf die Zieläußerung ziehen",
+        "capture_trim_instruction": "Mindestens 3 Sekunden der Zieläußerung auswählen",
+        "capture_protocol_hint": "VOXplot analysiert daraus ein qualitätsgeprüftes 3-Sekunden-Fenster. Ruhiger Raum, gleicher Abstand und dasselbe Gerät verbessern Trends.",
+        "capture_selection_too_short": "Die Auswahl muss mindestens 3 Sekunden lang sein.",
         "capture_play_all": "Alles abspielen",
         "capture_play_selection": "Auswahl abspielen",
         "capture_record_again": "Erneut aufnehmen",
@@ -168,12 +193,12 @@ UI_STRINGS = {
         "analyze_button": "Analyze & log",
         "success": "Recorded and logged.",
         "error": "Analysis failed -- see QA (Debug) below for details.",
-        "qa_expander": "QA (Debug) -- not visible to end users",
+        "qa_expander": "Technical recording report",
         "qa_no_run": "No analysis has been run yet in this session.",
 
         # --- Dashboard shell ---
         "app_name": "VOXplot",
-        "app_version": "v2.3.0",
+        "app_version": "v2.4.0",
         "tab_training": "TRAINING",
         "tab_voice_analysis": "VOICE ANALYSIS",
         "tab_details": "DETAILS",
@@ -194,9 +219,17 @@ UI_STRINGS = {
 
         # --- Hero / composite score ---
         "hero_title": "Voice Quality",
-        "status_optimal": "Optimal",
-        "status_attention": "Attention",
-        "status_concerning": "Concerning",
+        "hero_subtitle": "Personal acoustic trend — not a diagnosis",
+        "hero_recipe": "50% overall acoustic index · 50% breathiness estimate",
+        "recording_quality_label": "Recording quality",
+        "quality_usable": "comparable",
+        "quality_limited": "limited",
+        "quality_not_usable": "not usable",
+        "quality_legacy_unknown": "legacy / unknown",
+        "score_not_available": "Not scored",
+        "status_optimal": "Reference-aligned",
+        "status_attention": "Near reference boundary",
+        "status_concerning": "Outside reference range",
         "prev_week_label": "Prev. Week Avg",
         "prev_month_label": "Prev. Month Avg",
 
@@ -219,9 +252,9 @@ UI_STRINGS = {
         "legend_current": "Current",
         "legend_week_avg": "Weekly Avg",
         "legend_month_avg": "Monthly Avg",
-        "verdict_optimal": "Consistent quality. Your voice metrics are optimal.",
-        "verdict_attention": "Slight deviations detected. Some values should be monitored.",
-        "verdict_concerning": "Several values are outside the normal range. A speech-language pathology evaluation is recommended.",
+        "verdict_optimal": "Your personal trend is close to the configured reference ranges.",
+        "verdict_attention": "Some values are near a reference boundary. Compare only like-for-like, quality-checked recordings.",
+        "verdict_concerning": "Several values are outside the configured reference ranges. This is not a diagnosis.",
 
         # --- Details tab ---
         "details_group_hoarseness": "Hoarseness",
@@ -232,14 +265,17 @@ UI_STRINGS = {
         "trend_toggle_week": "Week",
         "trend_toggle_month": "Month",
         "trend_select_metric": "Select parameter",
-        "trend_norm_line": "Norm cutoff",
+        "trend_norm_line": "Reference cutoff",
         "no_history": "No previous sessions logged yet.",
+        "trend_protocol_note": "The trend contains only recordings with the same protocol and scoring version.",
 
         # --- Capture flow ---
         "capture_cancel": "Cancel",
         "capture_next": "Next",
         "capture_waveform_title": "Recording Waveform",
-        "capture_trim_instruction": "Drag to select the target utterance",
+        "capture_trim_instruction": "Select at least 3 seconds of the target utterance",
+        "capture_protocol_hint": "VOXplot analyzes a quality-checked 3-second window from this selection. A quiet room, consistent distance, and the same device improve trends.",
+        "capture_selection_too_short": "The selection must be at least 3 seconds long.",
         "capture_play_all": "Play All",
         "capture_play_selection": "Play Selection",
         "capture_record_again": "Record again",
@@ -275,7 +311,7 @@ UI_STRINGS = {
 # truth so the dashboard, the details table, and the radar chart never
 # drift apart.
 METRIC_META = {
-    "f0_mean_hz": {"label": "Mean Speaking F0", "unit": "Hz", "group": "general"},
+    "f0_mean_hz": {"label": "Mean sustained-vowel F0", "unit": "Hz", "group": "general"},
     "f0_sd_hz": {"label": "Pitch Variation", "unit": "Hz", "group": "general"},
     "f0_sd_st": {"label": "Pitch Variation", "unit": "semitones", "group": "general"},
     "jitter_local_pct": {"label": "Jitter (local)", "unit": "%", "group": "hoarseness"},
@@ -290,8 +326,8 @@ METRIC_META = {
     "ltas_tilt_db": {"label": "LTAS Tilt", "unit": "dB", "group": "general"},
     "gne": {"label": "GNE", "unit": "", "group": "breathiness"},
     "h1_h2_db": {"label": "H1-H2", "unit": "dB", "group": "breathiness"},
-    "avqi": {"label": "AVQI", "unit": "", "group": "hoarseness"},
-    "abi": {"label": "ABI", "unit": "", "group": "breathiness"},
+    "avqi": {"label": "AVQI-like overall index", "unit": "", "group": "hoarseness"},
+    "abi": {"label": "Voxplot breathiness estimate", "unit": "", "group": "breathiness"},
 }
 
 # The Voice Profile hexagon's 6 axes, in plotting order (see ui/svg_components.py),
@@ -299,11 +335,20 @@ METRIC_META = {
 # cluster (right half) -- matches the reference VOXplot layout.
 RADAR_AXES = ["avqi", "hnr_db", "jitter_ppq5_pct", "abi", "gne", "cpps_sv_db"]
 
-# Composite "Stimm-Score" (0-100, higher = better) is built from these two
-# validated multiparametric indices rather than all 16 raw numbers, since
-# AVQI/ABI are themselves regression composites of most of the others --
-# folding both layers in would double-count the same underlying signal.
+# The established Voice Quality score (0-100, higher = better) is a personal
+# trend baseline: 50% AVQI-like overall acoustic index + 50% custom Voxplot
+# breathiness estimate. It deliberately does not add raw inputs again, since
+# both component indices already contain overlapping acoustic information.
 COMPOSITE_METRICS = ["avqi", "abi"]
+
+# Domain cards are descriptive one-metric reference indicators, not a second
+# diagnostic composite. This avoids double-counting jitter/shimmer/CPPS and
+# duplicate Hz/semitone pitch variation in the interface.
+GROUP_SCORE_METRICS = {
+    "hoarseness": ["avqi"],
+    "breathiness": ["abi"],
+    "general": ["f0_sd_st"],
+}
 
 STATUS_THRESHOLDS = {"optimal": 80, "attention": 50}  # score >= optimal -> Optimal; >= attention -> Attention; else Concerning
 

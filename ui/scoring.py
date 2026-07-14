@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 
 from analysis.norms import NormRange
-from config import COMPOSITE_METRICS, STATUS_THRESHOLDS, METRIC_META
+from config import COMPOSITE_METRICS, GROUP_SCORE_METRICS, STATUS_THRESHOLDS
 
 
 def goodness(value: float, norm: NormRange, steepness: float = 2.0) -> float | None:
@@ -65,41 +65,47 @@ def abnormality(value: float, norm: NormRange, steepness: float = 2.0) -> float 
     return None if g is None else 100.0 - g
 
 
-def composite_stimm_score(values: dict, norms: dict, metrics: list[str] = None) -> float | None:
-    """Composite 0-100 score (higher = better), averaged over the
-    multiparametric indices (AVQI/ABI by default -- see config.COMPOSITE_METRICS).
-    Not built from all 16 raw parameters: AVQI/ABI are themselves regression
-    composites of most of the others, so including both layers would double
-    -count the same underlying acoustic signal."""
-    metrics = metrics or COMPOSITE_METRICS
+def composite_stimm_score(
+    values: dict,
+    norms: dict,
+    metrics: list[str] | None = None,
+    *,
+    require_all: bool = True,
+) -> float | None:
+    """Voice Quality score (higher = better), averaged over its declared
+    inputs. The default requires both AVQI-like and breathiness components:
+    silently replacing the 50/50 score with a one-component reading would
+    change its meaning without telling the user."""
+    metrics = list(metrics or COMPOSITE_METRICS)
     scores = []
     for name in metrics:
         norm = norms.get(name)
         norm_range = _as_norm_range(norm)
         g = goodness(values.get(name), norm_range)
-        if g is not None:
-            scores.append(g)
+        if g is None:
+            if require_all:
+                return None
+            continue
+        scores.append(g)
     if not scores:
         return None
     return sum(scores) / len(scores)
 
 
 def group_score(values: dict, norms: dict, group: str) -> float | None:
-    """Same composite-scoring logic as composite_stimm_score, applied to
-    every metric config.METRIC_META tags with the given group (Hoarseness /
-    Breathiness / General) instead of just AVQI+ABI -- a broader "how's
-    this whole cluster doing" score. A single cherry-picked raw parameter
-    (e.g. CPPS alone) can look fine while the cluster it belongs to is
-    genuinely poor (shimmer and AVQI both out of range, say), which is
-    exactly the misleading picture this is meant to replace."""
-    members = [k for k, meta in METRIC_META.items() if meta["group"] == group]
-    return composite_stimm_score(values, norms, metrics=members)
+    """Return a transparent domain indicator, not a second composite.
+
+    The configured metric list intentionally avoids counting raw metrics
+    again when AVQI-like or breathiness estimates already include them.
+    """
+    members = GROUP_SCORE_METRICS.get(group, [])
+    return composite_stimm_score(values, norms, metrics=members, require_all=True)
 
 
 def status_word_key(score: float | None) -> str:
     """Returns the config.py UI_STRINGS key for the status word matching a score."""
     if score is None:
-        return "status_attention"
+        return "status_unavailable"
     if score >= STATUS_THRESHOLDS["optimal"]:
         return "status_optimal"
     if score >= STATUS_THRESHOLDS["attention"]:
@@ -109,7 +115,12 @@ def status_word_key(score: float | None) -> str:
 
 def status_color_key(score: float | None) -> str:
     key = status_word_key(score)
-    return {"status_optimal": "optimal", "status_attention": "warning", "status_concerning": "bad"}[key]
+    return {
+        "status_optimal": "optimal",
+        "status_attention": "warning",
+        "status_concerning": "bad",
+        "status_unavailable": "muted",
+    }[key]
 
 
 def _as_norm_range(norm) -> NormRange | None:

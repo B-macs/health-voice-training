@@ -4,6 +4,48 @@ Root-cause notes for fixes made while validating against the Saarbruecken
 Voice Database (SVD) and the Perceptual Voice Qualities Database (VQD).
 See PLAN.md for the full architecture/gate status.
 
+## 2026-07-14 — measurement reliability and audit corrections
+
+- **Voice Quality retained, not removed.** The existing equal-weight 0–100
+  Voice Quality score remains the personal baseline trend. It now requires
+  both declared components, so a missing AVQI-like or breathiness value is
+  `Not scored` rather than a false zero or a silent one-component score.
+  Status text now describes configured reference alignment rather than making
+  a diagnosis.
+- **Versioned 3 s capture protocol and recording QC.** New recordings use
+  `de_windowed_3s_v2`: one activity-rich contiguous 3 s window is selected
+  from each manually-approved vowel/speech clip. Silence/too-short/mostly
+  inactive/heavily clipped selections are blocked; limited captures are
+  retained but omitted from default comparable trends. This is an
+  approximation to the German equal-duration protocol, not a claim of
+  licensed-reference-script parity.
+- **Provenance and statistical history handling.** New records retain
+  non-audio protocol, raw/display indices, model hash/range warning, CPPS
+  recipe, runtime, selected-duration, capture, and reference-cutoff metadata
+  in existing `sample_meta` JSONB. Legacy recordings stay readable but are
+  not silently mixed with v2 trends. Same-day retakes use a median with
+  spread/count, stored norms stay immutable, JSONL history is time-sorted,
+  and comparison windows are local-calendar days in Europe/Berlin.
+- **Corrected AVQI citation without silently retuning the baseline.** The
+  German AVQI v03.01 paper reports 1.85 (72% sensitivity/90% specificity),
+  not the old documentation's 2.70 claim. 2.70 remains a versioned personal
+  reference pending matched-output parity; it is no longer presented as that
+  paper's clinical cutoff.
+- **CPPS setting made explicit.** The pre-existing
+  `subtract trend before smoothing=True` recipe is documented and persisted.
+  It remains unchanged because Praat confirms it changes CPPS and no
+  reference-parity evidence supports a baseline-breaking switch.
+- **ABI 2.10 single source of truth.** The production VQD Lasso's model JSON
+  now stores its 2.10 threshold/metrics. Norms and report generation read it;
+  the fitting script derives future thresholds from out-of-fold predictions.
+  The archived report is labelled pre-Lasso until VQD source results are
+  available to regenerate it.
+
+See `docs/voice_quality_measurement_policy.md` for the complete rationale,
+validation boundaries, and required future investigations. Older entries
+below are historical notes and may describe superseded OLS/2.0 or 2.70
+claims.
+
 ## SVD data-pipeline fixes
 
 - **NSP format decoding.** The SVD ships `.nsp` (Kay Elemetrics CSL) audio,

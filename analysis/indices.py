@@ -14,11 +14,11 @@ product and cannot legally be vendored here).
 Validated on real data: on 362 real, professionally-diagnosed Saarbruecken
 Voice Database (SVD) recordings, this formula scored healthy voices lower
 than both Hyperfunktionelle and Hypofunktionelle Dysphonie (median 2.43 vs.
-3.24 / 3.27), correctly separated at the German cutoff of 2.70 (Barsties v
-Latoszek et al., German validation study). Sub-measure Praat settings not
-fully specified in the papers (CPPS window/quefrency averaging, exact LTAS
-Tilt convention) use Praat's documented defaults -- see PLAN.md's Praat call
-recipes table for what's tested/verified vs. approximated.
+3.24 / 3.27). That is useful historical discrimination evidence, not
+reference-script parity or a transferable clinical cutoff. Sub-measure Praat
+settings not fully specified in the papers (CPPS window/quefrency averaging,
+exact LTAS Tilt convention) use Praat's documented defaults -- see PLAN.md's
+Praat call recipes table for what's tested/verified vs. approximated.
 
 ## ABI -- NOT Barsties' published formula (three-stage investigation, see below)
 
@@ -117,6 +117,7 @@ discriminant, not a certified clinical instrument.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -139,6 +140,7 @@ from analysis.parselmouth_metrics import (
 
 
 TARGET_INTENSITY_DB = 70.0
+OOD_MAX_ABS_Z = 3.0
 
 
 def _intensity_normalized(sound: parselmouth.Sound) -> parselmouth.Sound:
@@ -175,6 +177,8 @@ def compute_hf_noise_db(sound: parselmouth.Sound, freq_hz: float = 6000.0) -> fl
 @dataclass
 class AVQIResult:
     avqi: float
+    raw_avqi: float
+    was_clipped: bool
     cpps_db: float
     hnr_db: float
     shimmer_local_pct: float
@@ -185,6 +189,8 @@ class AVQIResult:
     def as_dict(self) -> dict:
         return {
             "avqi": self.avqi,
+            "raw_avqi": self.raw_avqi,
+            "was_clipped": self.was_clipped,
             "components": {
                 "cpps_db": self.cpps_db,
                 "hnr_db": self.hnr_db,
@@ -199,6 +205,12 @@ class AVQIResult:
 @dataclass
 class ABIResult:
     abi: float
+    raw_abi: float
+    predicted_grbas_b: float
+    was_clipped: bool
+    feature_z_scores: dict[str, float]
+    max_abs_feature_z: float | None
+    out_of_distribution: bool
     cpps_db: float
     jitter_local_pct: float
     gne_max: float
@@ -212,6 +224,12 @@ class ABIResult:
     def as_dict(self) -> dict:
         return {
             "abi": self.abi,
+            "raw_abi": self.raw_abi,
+            "predicted_grbas_b": self.predicted_grbas_b,
+            "was_clipped": self.was_clipped,
+            "feature_z_scores": self.feature_z_scores,
+            "max_abs_feature_z": self.max_abs_feature_z,
+            "out_of_distribution": self.out_of_distribution,
             "components": {
                 "cpps_db": self.cpps_db,
                 "jitter_local_pct": self.jitter_local_pct,
@@ -234,7 +252,31 @@ _ABI_MODEL_PATH = Path(__file__).parent / "abi_vqd_model.json"
 _abi_model = json.loads(_ABI_MODEL_PATH.read_text(encoding="utf-8")) if _ABI_MODEL_PATH.exists() else None
 
 
-def _abi_svd_score(feature_values: dict) -> float:
+@dataclass(frozen=True)
+class ABIScore:
+    """Raw and display-safe output from the VQD-fitted breathiness model."""
+
+    displayed: float
+    raw: float
+    predicted_grbas_b: float
+    feature_z_scores: dict[str, float]
+    max_abs_feature_z: float | None
+    out_of_distribution: bool
+
+
+# DETERMINISTIC: expose the exact VQD model identity for record provenance; fallback raises if missing.
+def abi_model_metadata() -> dict:
+    if _abi_model is None:
+        raise RuntimeError("analysis/abi_vqd_model.json not found")
+    return {
+        "model_id": _abi_model.get("model_id", "vqd_lasso_grbas_breathiness_unversioned"),
+        "model_sha256": hashlib.sha256(_ABI_MODEL_PATH.read_bytes()).hexdigest(),
+        "decision_threshold_0_10": _abi_model.get("decision_threshold_0_10"),
+        "method": _abi_model.get("method"),
+    }
+
+
+def _abi_vqd_score(feature_values: dict) -> ABIScore:
     """Score the 9 ABI sub-measures with the model fit directly on VQD's
     real perceptual GRBAS-Breathiness ratings (continuous, 0-3 scale,
     averaged across 3-4 expert raters x 2 trials; ICC .844 interrater/.884
@@ -254,10 +296,28 @@ def _abi_svd_score(feature_values: dict) -> float:
         )
     x = np.array([feature_values[f] for f in _abi_model["features"]])
     if not np.all(np.isfinite(x)):
-        return float("nan")
+        return ABIScore(
+            displayed=float("nan"),
+            raw=float("nan"),
+            predicted_grbas_b=float("nan"),
+            feature_z_scores={},
+            max_abs_feature_z=None,
+            out_of_distribution=True,
+        )
     x_scaled = (x - np.array(_abi_model["scaler_mean"])) / np.array(_abi_model["scaler_scale"])
     predicted_grbas_b = np.dot(x_scaled, _abi_model["coefficients"]) + _abi_model["intercept"]
-    return _clip_0_10(predicted_grbas_b * _abi_model["output_scale_0_3_to_0_10"])
+    raw = float(predicted_grbas_b * _abi_model["output_scale_0_3_to_0_10"])
+    displayed = _clip_0_10(raw)
+    z_scores = {name: float(value) for name, value in zip(_abi_model["features"], x_scaled)}
+    max_abs_z = max((abs(value) for value in z_scores.values()), default=None)
+    return ABIScore(
+        displayed=displayed,
+        raw=raw,
+        predicted_grbas_b=float(predicted_grbas_b),
+        feature_z_scores=z_scores,
+        max_abs_feature_z=max_abs_z,
+        out_of_distribution=bool(max_abs_z is not None and max_abs_z >= OOD_MAX_ABS_Z),
+    )
 
 
 def compute_avqi(combined_sound: parselmouth.Sound) -> AVQIResult:
@@ -276,10 +336,13 @@ def compute_avqi(combined_sound: parselmouth.Sound) -> AVQIResult:
         + 0.01 * ltas["ltas_slope_db"]
         + 0.093 * ltas["ltas_tilt_db"]
     )
-    avqi = _clip_0_10(raw * 2.8902)
+    raw_avqi = raw * 2.8902
+    avqi = _clip_0_10(raw_avqi)
 
     return AVQIResult(
         avqi=avqi,
+        raw_avqi=float(raw_avqi),
+        was_clipped=not np.isclose(avqi, raw_avqi),
         cpps_db=cpps,
         hnr_db=hnr,
         shimmer_local_pct=shimmer["shimmer_local_pct"],
@@ -301,7 +364,7 @@ def compute_abi(combined_sound: parselmouth.Sound) -> ABIResult:
     shimmer = compute_shimmer(combined_sound)
     psd = compute_psd_seconds(combined_sound)
 
-    abi = _abi_svd_score({
+    abi_score = _abi_vqd_score({
         "abi_sub_cpps_db": cpps,
         "abi_sub_jitter_local_pct": jitter["jitter_local_pct"],
         "abi_sub_gne_max": gne,
@@ -314,7 +377,13 @@ def compute_abi(combined_sound: parselmouth.Sound) -> ABIResult:
     })
 
     return ABIResult(
-        abi=abi,
+        abi=abi_score.displayed,
+        raw_abi=abi_score.raw,
+        predicted_grbas_b=abi_score.predicted_grbas_b,
+        was_clipped=not np.isclose(abi_score.displayed, abi_score.raw, equal_nan=True),
+        feature_z_scores=abi_score.feature_z_scores,
+        max_abs_feature_z=abi_score.max_abs_feature_z,
+        out_of_distribution=abi_score.out_of_distribution,
         cpps_db=cpps,
         jitter_local_pct=jitter["jitter_local_pct"],
         gne_max=gne,

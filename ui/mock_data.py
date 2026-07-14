@@ -6,9 +6,10 @@ VOXplot PDF export (VOXplot_Profile_06_Nov25.pdf) wherever that PDF gives
 one. Four parameters aren't in that PDF at all (it doesn't report f0 or
 shimmer apq11) -- those four are clearly-marked ESTIMATED PLACEHOLDERS, not
 real measurements. In/out-of-range status is computed from THIS app's own
-validated German norms (analysis/norms.py), not the reference PDF's norms
-(which used a different, stricter cutoff -- e.g. AVQI < 1.17 vs. our
-German-validated 2.70) -- mixing norm systems would be incoherent. This is
+versioned reference boundaries (analysis/norms.py), not the reference PDF's
+norms (which used a different, stricter cutoff -- e.g. AVQI < 1.17 vs. this
+app's 2.70 personal-trend boundary) -- mixing norm systems would be
+incoherent. This is
 also why the composite score below reads "Auffaellig" (concerning), not the
 mockup's illustrative "Optimal": ABI and CPPS genuinely breach OUR norms
 for these real values, and the brief was explicit that the score must not

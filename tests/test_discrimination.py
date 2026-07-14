@@ -4,9 +4,10 @@ There is no licensed reference script available to test byte-for-byte
 parity against (see PLAN.md "Architecture decision"), so G5 is validated
 here instead as: does the pipeline's AVQI/ABI separate real, professionally
 diagnosed healthy vs. pathological German voices (Saarbruecken Voice
-Database) in the expected direction, at the German-validated cutoffs?
-This is a weaker claim than script parity, but it is checked against real
-labeled clinical data rather than synthetic signals or guesses.
+Database) in the expected direction, at the app's versioned reference
+boundaries? This is a regression/discrimination check, not evidence that
+Voxplot reproduces the licensed reference script or can transfer the German
+paper's clinical cutoff to this implementation.
 
 Skips (does not fail) if the SVD dataset isn't present locally -- this
 suite depends on multi-GB external data that isn't vendored into the repo.
@@ -18,7 +19,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from sklearn.metrics import roc_auc_score
+sklearn_metrics = pytest.importorskip(
+    "sklearn.metrics",
+    reason="scikit-learn is an optional validation-only dependency; install requirements-dev.txt",
+)
+roc_auc_score = sklearn_metrics.roc_auc_score
 
 from analysis.norms import get_norms
 from tests.svd_utils import (
@@ -50,19 +55,19 @@ def _by_condition(results, key):
     return out
 
 
-def test_avqi_healthy_median_below_german_cutoff(svd_sample_results):
+def test_avqi_healthy_median_below_app_reference_boundary(svd_sample_results):
     by_cond = _by_condition(svd_sample_results, "avqi")
     cutoff = get_norms("de")["avqi"].max
     healthy_median = np.median(by_cond["healthy"])
-    assert healthy_median < cutoff, f"healthy AVQI median {healthy_median} not below German cutoff {cutoff}"
+    assert healthy_median < cutoff, f"healthy AVQI median {healthy_median} not below app reference boundary {cutoff}"
 
 
-def test_avqi_dysphonia_medians_above_german_cutoff(svd_sample_results):
+def test_avqi_dysphonia_medians_above_app_reference_boundary(svd_sample_results):
     by_cond = _by_condition(svd_sample_results, "avqi")
     cutoff = get_norms("de")["avqi"].max
     for condition in ("Hyperfunktionelle Dysphonie", "Hypofunktionelle Dysphonie"):
         median = np.median(by_cond[condition])
-        assert median > cutoff, f"{condition} AVQI median {median} not above German cutoff {cutoff}"
+        assert median > cutoff, f"{condition} AVQI median {median} not above app reference boundary {cutoff}"
 
 
 def test_avqi_auc_better_than_chance(svd_sample_results):
@@ -83,7 +88,7 @@ def test_abi_dysphonia_medians_exceed_healthy(svd_sample_results):
     not being primarily about breathiness (e.g. Hyperfunktionelle is
     typically strained/pressed, not breathy). So this checks relative
     ordering (still expected to hold), NOT absolute cutoff-crossing (the
-    VQD-calibrated cutoff of 2.0 is not expected to separate SVD conditions,
+    VQD-calibrated operating threshold of 2.10 is not expected to separate SVD conditions,
     which was never what it was fit for)."""
     by_cond = _by_condition(svd_sample_results, "abi")
     healthy_median = np.median(by_cond["healthy"])
@@ -133,15 +138,16 @@ def generate_report(results, out_path: Path):
     )
     lines.append(f"Sample size: {len(results)} (stratified across condition and sex, seed=123). "
                  f"Small-class caveat: Hypofunktionelle Dysphonie has only 16 complete "
-                 f"recordings in the entire SVD. The AVQI cutoff below (German-validated, "
-                 f"Barsties v Latoszek) is a real clinical cutoff; the ABI cutoff is the "
+                 f"recordings in the entire SVD. The AVQI boundary below is Voxplot's "
+                 f"versioned personal-trend reference, not the German paper's clinical cutoff; the ABI boundary is the "
                  f"VQD model's own Youden-optimal threshold for detecting real breathiness, "
                  f"not validated for SVD's general dysphonia categories -- see "
                  f"analysis/abi_vqd_model.json.\n")
 
     for metric, cutoff_key in (("avqi", "avqi"), ("abi", "abi")):
         cutoff = get_norms("de")[cutoff_key].max
-        lines.append(f"\n## {metric.upper()} by condition (German cutoff: {cutoff})\n\n")
+        boundary = "app trend reference" if metric == "avqi" else "VQD model operating threshold"
+        lines.append(f"\n## {metric.upper()} by condition ({boundary}: {cutoff})\n\n")
         lines.append("| condition | n | median | mean | min | max |\n|---|---|---|---|---|---|\n")
         by_cond = _by_condition(results, metric)
         for cond, vals in by_cond.items():

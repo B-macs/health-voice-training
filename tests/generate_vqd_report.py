@@ -47,7 +47,7 @@ def main():
         "Methods and Reliability/database overview v2.pdf'). Unlike SVD, "
         "this provides the actual continuous perceptual construct ABI is "
         "supposed to predict, not a diagnosis-category proxy. See "
-        "analysis/indices.py module docstring for the full three-stage "
+        "analysis/indices.py module docstring for the full four-stage "
         "investigation this resolved.\n\n"
         "NOTE: `vqd_fitted` below is in-sample (the deployed model was fit "
         "on all 296 of these recordings) -- the honest held-out estimate is "
@@ -80,8 +80,8 @@ def main():
 
     y_true = (grbas > 0.5).astype(int)
     auc = roc_auc_score(y_true, vqd_fitted)
-    threshold = model.get("probability_threshold") or 2.0
-    y_pred = (vqd_fitted > 2.0).astype(int)
+    threshold = float(model["decision_threshold_0_10"])
+    y_pred = (vqd_fitted > threshold).astype(int)
     tp = int(np.sum((y_true == 1) & (y_pred == 1)))
     fn = int(np.sum((y_true == 1) & (y_pred == 0)))
     tn = int(np.sum((y_true == 0) & (y_pred == 0)))
@@ -89,7 +89,7 @@ def main():
     sens = tp / (tp + fn) if (tp + fn) else float("nan")
     spec = tn / (tn + fp) if (tn + fp) else float("nan")
     lines.append(f"\nAUC (any breathiness present, GRBAS-B > 0.5) = {auc:.3f}; "
-                 f"at cutoff 2.0 (0-10 scale): sensitivity = {sens:.2f}, specificity = {spec:.2f} (n={len(rows)}).\n")
+                 f"at cutoff {threshold:.2f} (0-10 scale): sensitivity = {sens:.2f}, specificity = {spec:.2f} (n={len(rows)}).\n")
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUT_PATH.write_text("".join(lines), encoding="utf-8")

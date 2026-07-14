@@ -63,7 +63,12 @@ def test_status_word_key_thresholds():
     assert status_word_key(90) == "status_optimal"
     assert status_word_key(60) == "status_attention"
     assert status_word_key(20) == "status_concerning"
-    assert status_word_key(None) == "status_attention"
+    assert status_word_key(None) == "status_unavailable"
+
+
+def test_voice_quality_requires_both_declared_components():
+    norms = {"avqi": NormRange(max=2.70), "abi": NormRange(max=2.10)}
+    assert composite_stimm_score({"avqi": 1.0}, norms) is None
 
 
 def test_period_key_day_week_month():
@@ -105,14 +110,12 @@ def test_aggregate_buckets_by_day_with_average_min_max():
     assert two_days_ago_bucket.max == 3.0
 
 
-def test_aggregate_averages_not_medians_multiple_same_day_inputs():
-    """A skewed set of same-day inputs must average, not take the middle
-    value -- median would let a single outlier session dominate the day's
-    displayed trend point instead of reflecting all of them."""
+def test_aggregate_uses_median_for_multiple_same_day_inputs():
+    """A skewed retake must not dominate that calendar day's trend point."""
     records = [_fake_record(0, 1.0, 0.5), _fake_record(0, 1.0, 0.5), _fake_record(0, 10.0, 0.5)]
     buckets = aggregate(records, "avqi", "day")
     assert len(buckets) == 1
-    assert abs(buckets[0].average - 4.0) < 1e-9  # mean(1,1,10), NOT median(1,1,10)=1
+    assert abs(buckets[0].average - 1.0) < 1e-9
 
 
 def test_period_to_ordinal_orders_and_spaces_by_real_elapsed_time():

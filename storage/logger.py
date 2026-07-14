@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Protocol
 
 from storage.daily_averages import DailyAverageStore
+from storage.dates import local_date, sort_records
 
 
 class RecordStore(Protocol):
@@ -40,7 +41,7 @@ class JsonlRecordStore:
                 line = line.strip()
                 if line:
                     records.append(json.loads(line))
-        return records
+        return sort_records(records)
 
 
 REQUIRED_PARAMETER_KEYS = (
@@ -79,5 +80,5 @@ def log_session(
     store.append(record)
     if daily_store is not None:
         all_records = store.read_all()
-        daily_store.upsert_from_raw(all_records, record["timestamp"][:10])
+        daily_store.upsert_from_raw(all_records, local_date(record).isoformat())
     return record

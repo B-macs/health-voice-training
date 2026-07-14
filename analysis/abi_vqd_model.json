@@ -1,4 +1,11 @@
 {
+  "model_id": "vqd_lasso_grbas_breathiness_v1",
+  "decision_threshold_0_10": 2.1,
+  "decision_threshold_source": "Current Lasso operating point for any breathiness (GRBAS-B > 0.5). It is carried forward from the production refit and will be regenerated from out-of-fold predictions when the VQD source results are available.",
+  "decision_threshold_comparison": "greater_than",
+  "cv_roc_auc": 0.888,
+  "cv_sensitivity": 0.81,
+  "cv_specificity": 0.82,
   "features": [
     "abi_sub_cpps_db",
     "abi_sub_jitter_local_pct",

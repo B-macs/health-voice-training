@@ -37,6 +37,7 @@ import json
 import numpy as np
 from scipy.stats import pearsonr
 from sklearn.linear_model import Lasso
+from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import KFold, cross_val_predict
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import make_pipeline
@@ -44,6 +45,34 @@ from sklearn.pipeline import make_pipeline
 from fit_abi_vqd import FEATURES, load_data, MODEL_PATH
 
 ALPHA = 0.01
+
+
+# DETERMINISTIC: select an operating threshold from out-of-fold predictions; fallback returns no threshold for empty data.
+def select_youden_threshold(scores_0_10: np.ndarray, labels: np.ndarray) -> dict:
+    candidates = np.unique(scores_0_10[np.isfinite(scores_0_10)])
+    if not len(candidates) or len(np.unique(labels)) < 2:
+        raise ValueError("Need finite scores and both outcome classes to select a threshold")
+    best = None
+    for threshold in candidates:
+        prediction = scores_0_10 > threshold
+        tp = int(np.sum((labels == 1) & prediction))
+        fn = int(np.sum((labels == 1) & ~prediction))
+        tn = int(np.sum((labels == 0) & ~prediction))
+        fp = int(np.sum((labels == 0) & prediction))
+        sensitivity = tp / (tp + fn) if (tp + fn) else 0.0
+        specificity = tn / (tn + fp) if (tn + fp) else 0.0
+        candidate = (sensitivity + specificity - 1.0, sensitivity, specificity, float(threshold))
+        if best is None or candidate[:3] > best[:3]:
+            best = candidate
+    assert best is not None
+    return {
+        "decision_threshold_0_10": best[3],
+        "cv_sensitivity": best[1],
+        "cv_specificity": best[2],
+        "cv_roc_auc": float(roc_auc_score(labels, scores_0_10)),
+        "decision_threshold_comparison": "greater_than",
+        "decision_threshold_source": "Youden-optimal threshold from five-fold out-of-fold VQD predictions for GRBAS-B > 0.5.",
+    }
 
 
 def main():
@@ -56,6 +85,17 @@ def main():
     r_cv, _ = pearsonr(cv_pred, y_grbas)
     rmse_cv = np.sqrt(np.mean((cv_pred - y_grbas) ** 2))
     print(f"5-fold CV: Pearson r={r_cv:.3f}, RMSE={rmse_cv:.3f} (was r=0.814, RMSE=0.451 for OLS)")
+    scale_0_3_to_0_10 = 10.0 / 3.0
+    threshold_meta = select_youden_threshold(
+        np.clip(cv_pred * scale_0_3_to_0_10, 0, 10),
+        (y_grbas > 0.5).astype(int),
+    )
+    print(
+        "OOF threshold: "
+        f"{threshold_meta['decision_threshold_0_10']:.2f} "
+        f"(AUC={threshold_meta['cv_roc_auc']:.3f}, "
+        f"sens={threshold_meta['cv_sensitivity']:.2f}, spec={threshold_meta['cv_specificity']:.2f})"
+    )
 
     final_pipeline = make_pipeline(StandardScaler(), Lasso(alpha=ALPHA, max_iter=20000))
     final_pipeline.fit(X, y_grbas)
@@ -67,9 +107,9 @@ def main():
         print(f"  {f:28s} {c:8.3f}")
 
     fitted_0_3 = final_pipeline.predict(X)
-    scale_0_3_to_0_10 = 10.0 / 3.0
-
     model = {
+        "model_id": "vqd_lasso_grbas_breathiness_v1",
+        **threshold_meta,
         "features": FEATURES,
         "scaler_mean": scaler.mean_.tolist(),
         "scaler_scale": scaler.scale_.tolist(),

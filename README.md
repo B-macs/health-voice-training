@@ -1,15 +1,20 @@
 # Voxplot prototype (standalone voice-acoustics analysis, Oura-style dashboard)
 
-Captures a sustained vowel [a:] (~3s) and a German continuous-speech passage
-via browser mic or `.wav` upload, runs the existing headless acoustic
-analysis (14 single parameters + AVQI + ABI, 0-10 each) unchanged, logs one
-structured record per session, and presents the
-results as a dark, Oura-style dashboard: a composite "Stimm-Score" hero
+Captures a sustained vowel [a:] and a German continuous-speech passage via
+browser mic or `.wav` upload. New recordings use a documented, quality-checked
+three-second window from each user-approved sample, then run the existing
+acoustic analysis (14 single parameters + AVQI-like overall index + Voxplot
+breathiness estimate). Every session logs non-audio provenance and presents
+results as a dark, Oura-style dashboard: a composite "Voice Quality" hero
 ring, a 30-day trend, an acoustic-insights list, and the hexagonal Voice
-Profile radar. No AI. A raw-data "QA (Debug)" expander is available for
-verification. The app is German throughout (`config.py`, `LANGUAGE = "de"`):
-reading passage, every UI string, and AVQI/ABI cutoffs all derive from that
-one setting.
+Profile radar. No AI. A technical-record expander is available for
+verification. UI language and analysis language are deliberately separate in
+`config.py`.
+
+Read [the measurement policy](docs/voice_quality_measurement_policy.md)
+before interpreting a score. It records the exact Voice Quality recipe,
+capture protocol, historical-data policy, known limitations, and required
+validation work.
 
 See `PLAN.md` for the full architecture, the AVQI/ABI sourcing decision and
 its real-data validation, Praat call recipes, and validation-gate status.
@@ -26,10 +31,13 @@ any DSP or touch the AVQI/ABI computation.
   the single source of truth for which parameters group under Hoarseness
   ("Heiserkeit") vs. Breathiness ("Behauchtheit") vs. General ("Allgemein"),
   and which 6 feed the Voice Profile radar's axes.
-- **`ui/scoring.py`** -- the composite "Stimm-Score" (0-100, higher = better).
+- **`ui/scoring.py`** -- the retained composite "Voice Quality" score
+  (0-100, higher = better). It is a personal acoustic trend: 50% AVQI-like
+  overall index + 50% Voxplot breathiness estimate, and requires both
+  components rather than silently becoming a one-component score.
   Voice metrics are mixed-direction (lower is better for AVQI/ABI/jitter/
   shimmer, higher is better for HNR/GNE/CPPS) and judged against a
-  published threshold, not a natural 0-100 scale, so every value is mapped
+  configured reference boundary, not a natural 0-100 scale, so every value is mapped
   through `goodness()`: 100 far better than its own norm cutoff, 50 exactly
   at the cutoff, →0 far worse. The composite score is built from AVQI+ABI
   only, not all 16 raw numbers -- they're themselves regression composites
@@ -42,7 +50,9 @@ any DSP or touch the AVQI/ABI computation.
   and pass/fail are deliberately decoupled), the hexagonal radar, and the
   trend/area chart.
 - **`ui/aggregation.py`** -- Day/Week/Month rollups over the configured
-  voice-history store.
+  voice-history store. Same-day retakes are reduced to a median with recorded
+  spread/count; trends only compare matching protocol/scoring versions and
+  quality-usable sessions.
   Every record is immutable and keyed by its ISO-8601 timestamp already;
   the ISO year-week and calendar year-month are derived here, on read, with
   no schema change. The norm used to flag each record is read from that
@@ -212,7 +222,7 @@ validation (see `analysis/indices.py`'s module docstring):
 ```bash
 python tests/build_vqd_manifest.py     # writes tests/vqd_manifest.csv
 python tests/run_vqd_batch.py          # writes tests/vqd_results.csv (~55 min, 296 recordings)
-python tests/fit_abi_vqd.py            # (re)fits analysis/abi_vqd_model.json -- the production ABI model
+python tests/fit_abi_vqd_lasso.py      # (re)fits analysis/abi_vqd_model.json -- the production breathiness model
 pytest tests/test_vqd_validation.py -v # ~8 min (40-recording stratified sample)
 python tests/generate_vqd_report.py    # regenerates reports/vqd_validation_report.md (full 296 recordings)
 ```
@@ -224,29 +234,31 @@ python tests/generate_vqd_report.py    # regenerates reports/vqd_validation_repo
   found). So neither AVQI nor ABI is validated as byte-for-byte parity with
   the official script that VOXplot wraps -- both are validated against real
   external databases instead. See PLAN.md's "Architecture decision".
-- **AVQI** is the published Barsties v Latoszek formula, reimplemented from
-  the real coefficients and confirmed to separate healthy vs. dysphonic SVD
-  voices correctly at the German cutoff (2.70). Some sub-measure Praat
-  settings not fully specified in the source papers use Praat's documented
-  defaults, not confirmed bit-for-bit against the original script.
+- **AVQI-like overall index** uses the published Barsties v Latoszek
+  coefficients, but is not proven byte-for-byte equivalent to the licensed
+  reference script. The German v03.01 paper reports **1.85**, not 2.70, for
+  its equalised/reference protocol. Voxplot retains 2.70 only as a versioned
+  personal-trend reference until matched-output parity work is complete; it
+  is not a German diagnostic cutoff. See the measurement policy.
 - **ABI is NOT the published Barsties formula.** That reimplementation was
   built, then proved badly broken -- confirmed two ways: first against real
   SVD diagnosis labels (healthy voices scored worse than dysphonic ones),
   then decisively against VQD's real expert perceptual breathiness ratings
   (Pearson r = -0.154, negative). It has been replaced with a linear
-  regression fit directly on VQD's continuous GRBAS-Breathiness ratings
-  (`tests/fit_abi_vqd.py`), the actual construct ABI is supposed to predict
-  -- 5-fold CV Pearson r=0.814, AUC 0.894 for detecting any breathiness.
+  Lasso regression fit directly on VQD's continuous GRBAS-Breathiness ratings
+  (`tests/fit_abi_vqd_lasso.py`), the actual construct ABI is supposed to
+  predict -- five-fold CV Pearson r=0.809, AUC 0.888 for detecting any
+  breathiness at the versioned 2.10 model threshold.
   This is a locally-calibrated breathiness discriminant validated against
   real expert ratings with published-grade inter/intra-rater reliability,
   not a certified reproduction of Barsties' validated ABI (different
   raters/samples/scale calibration) -- see `analysis/indices.py`'s module
-  docstring for the full three-stage investigation.
-- **Norms in `analysis/norms.py`** are indicative defaults (German AVQI
-  cutoff from the literature; ABI cutoff from the VQD-fitted model's own
-  Youden-optimal threshold, not language-specific; other parameters are
-  general literature values), not exhaustively validated for every
-  population. Configurable per language via `get_norms(language)`.
+  docstring for the full four-stage investigation.
+- **Norms in `analysis/norms.py`** are reference boundaries, not exhaustively
+  validated clinical cutoffs. The VQD custom-breathiness threshold is stored
+  in its model artifact; the AVQI-like reference is intentionally frozen for
+  personal-score continuity pending reference parity. Configurable per
+  language via `get_norms(language)`.
 - **G2 (browser mic capture)** could not be fully verified in this
   environment: the widget renders with no errors, but a live browser
   click-through needs manual verification (no browser-automation tool was

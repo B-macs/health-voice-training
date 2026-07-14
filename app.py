@@ -12,8 +12,9 @@ expander is available for verification.
 Interface text follows config.UI_LANGUAGE and the reading passage/AVQI/ABI
 norm cutoffs follow config.ANALYSIS_LANGUAGE (see config.py) -- independent
 settings, so the dashboard chrome can be read in one language while the
-recorded passage and clinical cutoffs stay tied to the language they were
-validated for.
+recorded passage and versioned reference boundaries stay tied to the
+language/protocol they were defined for. They are trend references, not
+clinical cutoffs.
 This file reads a results dict / the immutable recording schema and renders it;
 it falls back to ui/mock_data.py's fixture when no real sessions exist yet,
 so the UI can be built/previewed before -- or independently of -- a live
@@ -41,6 +42,7 @@ from ui.scoring import goodness, abnormality, composite_stimm_score, group_score
 from ui.aggregation import (
     aggregate, latest_and_prior_averages,
     period_to_ordinal, filter_to_window, trend_window_bounds,
+    filter_comparable_records, incompatible_record_count, record_norms,
 )
 from ui.mock_data import build_mock_log
 from ui.html_utils import flatten
@@ -52,9 +54,13 @@ from ui.training_plan import mark_item_complete, NEW_RECORDING
 from analysis.audio_io import load_wav_bytes, concatenate
 from analysis.parselmouth_metrics import analyze_single_parameters
 from analysis.indices import compute_avqi, compute_abi
+from analysis.provenance import build_analysis_metadata
+from analysis.recording_protocol import protocol_error_message, standardize_pair
 from analysis.norms import get_norms, flag_all
 from storage.logger import JsonlRecordStore, log_session
 from storage.daily_averages import DailyAverageStore
+from storage.dates import sort_records
+from storage.record_metadata import analysis_metadata, recording_quality_status
 from storage.supabase import SupabaseConfig, SupabaseRecordStore, SupabaseStorageError
 
 LOG_PATH = "voice_log.jsonl"
@@ -98,7 +104,22 @@ def get_records() -> list[dict]:
     """DETERMINISTIC: load durable history; fallback uses fixtures only when no recordings exist."""
     store, _ = _record_store()
     real = store.read_all()
-    return real if real else build_mock_log()
+    return sort_records(real if real else build_mock_log())
+
+
+# DETERMINISTIC: map persisted quality states to localized UI text; fallback is legacy / unknown.
+def _quality_text_key(record: dict) -> str:
+    return {
+        "usable": "quality_usable",
+        "limited": "quality_limited",
+        "not_usable": "quality_not_usable",
+        "legacy_unknown": "quality_legacy_unknown",
+    }.get(recording_quality_status(record), "quality_legacy_unknown")
+
+
+# DETERMINISTIC: render a metric value defensively; fallback is an em dash for unavailable output.
+def _metric_value_text(value: float | None) -> str:
+    return f"{value:.2f}" if value is not None else "—"
 
 
 # ===========================================================================
@@ -144,26 +165,30 @@ def render_tab_bar():
 def render_hero(records: list[dict]):
     current = records[-1]
     values = {**current["parameters"], **current["indices"]}
-    norms = get_norms()
+    norms = record_norms(current)
 
     score = composite_stimm_score(values, norms)
-    score_display = round(score) if score is not None else 0
-    status_key = status_word_key(score)
+    score_display = f"{score:.1f}".rstrip("0").rstrip(".") if score is not None else "—"
+    status_text = t(status_word_key(score)) if score is not None else t("score_not_available")
     color = COLORS[status_color_key(score)]
+    comparable = filter_comparable_records(records, current)
 
-    _, week_avg, month_avg = latest_and_prior_averages(records, "composite")
+    _, week_avg, month_avg = latest_and_prior_averages(comparable, "composite")
     trend_arrow = ""
     if week_avg is not None and month_avg is not None:
         trend_arrow = "&uarr;" if week_avg >= month_avg else "&darr;"
 
-    ring_html = hero_ring(score_display, color)
+    ring_html = hero_ring(score if score is not None else 0.0, color)
 
     avqi_val = values.get("avqi")
     abi_val = values.get("abi")
     avqi_norm = norms["avqi"]
     abi_norm = norms["abi"]
-    avqi_color = COLORS["optimal"] if avqi_norm.in_range(avqi_val) else COLORS["bad"]
-    abi_color = COLORS["optimal"] if abi_norm.in_range(abi_val) else COLORS["bad"]
+    avqi_in_range = avqi_norm.in_range(avqi_val)
+    abi_in_range = abi_norm.in_range(abi_val)
+    avqi_color = COLORS["optimal"] if avqi_in_range is True else (COLORS["bad"] if avqi_in_range is False else COLORS["muted"])
+    abi_color = COLORS["optimal"] if abi_in_range is True else (COLORS["bad"] if abi_in_range is False else COLORS["muted"])
+    excluded = incompatible_record_count(records, current)
 
     with st.container(key="card_hero"):
         left, right = st.columns([1, 1.3])
@@ -171,31 +196,36 @@ def render_hero(records: list[dict]):
             md(f"""
                 <div style="position:relative;width:176px;margin:0 auto;">
                   {ring_html}
-                  <div style="position:absolute;inset:0;display:flex;flex-direction:column;
+                    <div style="position:absolute;inset:0;display:flex;flex-direction:column;
                               align-items:center;justify-content:center;pointer-events:none;">
                     <div class="vx-big-number">{score_display}</div>
-                    <div class="vx-status-word" style="color:{color};">{t(status_key)}</div>
+                    <div class="vx-status-word" style="color:{color};">{status_text}</div>
                   </div>
                 </div>
                 <div class="vx-hero-caption" style="text-align:center;margin-top:0.5rem;">{t("hero_title")}</div>
+                <div class="vx-hero-caption" style="text-align:center;margin-top:0.25rem;">{t("hero_subtitle")}</div>
                 """)
         with right:
             md(f"""
-                <div class="vx-gbar-label-row"><span class="vx-gbar-name">AVQI</span>
-                    <span class="vx-gbar-value">{avqi_val:.2f} <span style="color:{COLORS['muted']};font-weight:400;">(Norm {avqi_norm.max:g})</span></span></div>
-                {gradient_bar(avqi_val, 10.0, avqi_norm.max, avqi_color)}
+                <div class="vx-gbar-label-row"><span class="vx-gbar-name">{METRIC_META['avqi']['label']}</span>
+                    <span class="vx-gbar-value">{_metric_value_text(avqi_val)} <span style="color:{COLORS['muted']};font-weight:400;">({t('trend_norm_line')} {avqi_norm.max:g})</span></span></div>
+                {gradient_bar(avqi_val if avqi_val is not None else 0.0, 10.0, avqi_norm.max or 1.0, avqi_color)}
                 <div style="height:0.7rem;"></div>
-                <div class="vx-gbar-label-row"><span class="vx-gbar-name">ABI</span>
-                    <span class="vx-gbar-value">{abi_val:.2f} <span style="color:{COLORS['muted']};font-weight:400;">(Norm {abi_norm.max:g})</span></span></div>
-                {gradient_bar(abi_val, 10.0, abi_norm.max, abi_color)}
+                <div class="vx-gbar-label-row"><span class="vx-gbar-name">{METRIC_META['abi']['label']}</span>
+                    <span class="vx-gbar-value">{_metric_value_text(abi_val)} <span style="color:{COLORS['muted']};font-weight:400;">({t('trend_norm_line')} {abi_norm.max:g})</span></span></div>
+                {gradient_bar(abi_val if abi_val is not None else 0.0, 10.0, abi_norm.max or 1.0, abi_color)}
+                <div class="vx-hero-caption" style="margin-top:0.65rem;">{t('hero_recipe')}</div>
+                <div class="vx-hero-caption" style="margin-top:0.25rem;">{t('recording_quality_label')}: {t(_quality_text_key(current))}</div>
                 """)
-            if week_avg is not None:
+            if week_avg is not None or month_avg is not None:
                 md(f"""
                     <div class="vx-hero-compare">
-                      <span>{t("prev_week_label")}: <b>{round(week_avg)}</b></span>
-                      <span>{t("prev_month_label")}: <b>{round(month_avg)}</b> {trend_arrow}</span>
+                      <span>{t("prev_week_label")}: <b>{round(week_avg) if week_avg is not None else '--'}</b></span>
+                      <span>{t("prev_month_label")}: <b>{round(month_avg) if month_avg is not None else '--'}</b> {trend_arrow}</span>
                     </div>
                     """)
+            if excluded:
+                md(f'<div class="vx-hero-caption">{t("trend_protocol_note")} ({excluded} legacy or non-comparable session(s) excluded.)</div>')
 
 
 def _trend_series(buckets, granularity: str, window: int, label_fmt=lambda p: p):
@@ -215,9 +245,11 @@ def _trend_series(buckets, granularity: str, window: int, label_fmt=lambda p: p)
 
 
 def render_trend_card(records: list[dict]):
-    buckets = aggregate(records, "composite", "day")
+    comparable = filter_comparable_records(records, records[-1])
+    buckets = aggregate(comparable, "composite", "day")
     buckets = filter_to_window(buckets, "day", TREND_WINDOW["day"])
     if not buckets:
+        st.info(t("no_history"))
         return
     values, labels, x_positions = _trend_series(buckets, "day", TREND_WINDOW["day"], label_fmt=lambda p: p[5:])
 
@@ -229,6 +261,7 @@ def render_trend_card(records: list[dict]):
             norm_value=STATUS_THRESHOLDS["optimal"], color_hex=COLORS["optimal"],
         ))
         md(f'<div class="vx-hero-caption">{t("trend_monthly_label")}</div>')
+        md(f'<div class="vx-hero-caption">{t("trend_protocol_note")}</div>')
 
 
 _INSIGHT_PILL_ICON = {"optimal": "&#10003;", "attention": "&ndash;", "concerning": "&#10005;"}
@@ -236,13 +269,12 @@ _INSIGHT_PILL_ICON = {"optimal": "&#10003;", "attention": "&ndash;", "concerning
 
 def render_insights_card(records: list[dict]):
     """Three GROUP-level insights (Hoarseness / Breathiness / Pitch
-    Stability), not individual raw parameters. A single cherry-picked
-    parameter can look fine while its whole cluster is poor -- e.g. CPPS
-    alone in range while shimmer and AVQI both aren't -- which used to make
-    the composite score's "Concerning" verdict look unexplained here."""
+    Stability), each based on one declared indicator rather than a hidden
+    second composite of correlated raw parameters."""
     current = records[-1]
     values = {**current["parameters"], **current["indices"]}
-    norms = get_norms()
+    norms = record_norms(current)
+    comparable = filter_comparable_records(records, current)
 
     insight_defs = [
         ("profile_cluster_hoarseness", "hoarseness"),
@@ -262,7 +294,7 @@ def render_insights_card(records: list[dict]):
             pill_icon = _INSIGHT_PILL_ICON[tier]
             in_range_for_bar = True if tier == "optimal" else (False if tier == "concerning" else None)
 
-            _, week_avg, month_avg = latest_and_prior_averages(records, f"group_{group}")
+            _, week_avg, month_avg = latest_and_prior_averages(comparable, f"group_{group}")
             week_txt = f"{week_avg:.0f}" if week_avg is not None else "--"
             month_txt = f"{month_avg:.0f}" if month_avg is not None else "--"
 
@@ -288,11 +320,18 @@ def _radar_abnormalities(values: dict, norms: dict) -> dict:
 def render_voice_profile_card(records: list[dict]):
     current = records[-1]
     current_values = {**current["parameters"], **current["indices"]}
-    norms = get_norms()
+    norms = record_norms(current)
+    comparable = filter_comparable_records(records, current)
     current_abn = _radar_abnormalities(current_values, norms)
 
-    week_buckets = {key: aggregate(records, key, "week") for key in RADAR_AXES}
-    month_buckets = {key: aggregate(records, key, "month") for key in RADAR_AXES}
+    week_buckets = {
+        key: filter_to_window(aggregate(comparable, key, "week"), "week", 1)
+        for key in RADAR_AXES
+    }
+    month_buckets = {
+        key: filter_to_window(aggregate(comparable, key, "month"), "month", 1)
+        for key in RADAR_AXES
+    }
     week_values = {key: (b[-1].average if b else None) for key, b in week_buckets.items()}
     month_values = {key: (b[-1].average if b else None) for key, b in month_buckets.items()}
     week_abn = _radar_abnormalities(week_values, norms)
@@ -300,7 +339,7 @@ def render_voice_profile_card(records: list[dict]):
 
     score = composite_stimm_score(current_values, norms)
     status_key = status_word_key(score)
-    verdict = t(f"verdict_{status_key.split('_')[1]}")
+    verdict = t(f"verdict_{status_key.split('_')[1]}") if score is not None else t("score_not_available")
 
     with st.container(key="card_profile"):
         md(f'<div class="vx-section-label">{t("profile_title")}</div>')
@@ -335,7 +374,7 @@ def render_voice_analysis_tab(records: list[dict]):
 def render_details_tab(records: list[dict]):
     current = records[-1]
     values = {**current["parameters"], **current["indices"]}
-    norms = get_norms()
+    norms = record_norms(current)
 
     groups = [
         ("details_group_general", "general"),
@@ -385,7 +424,10 @@ def render_details_tab(records: list[dict]):
     render_trends_section(records)
 
     with st.expander(t("qa_expander")):
-        st.json(current)
+        st.json({
+            **current,
+            "analysis_meta": analysis_metadata(current),
+        })
 
 
 def render_trends_section(records: list[dict]):
@@ -412,7 +454,8 @@ def render_trends_section(records: list[dict]):
         metric_key = st.session_state.trend_metric
         granularity = st.session_state.trend_granularity
         window = TREND_WINDOW[granularity]
-        buckets = aggregate(records, metric_key, granularity)
+        comparable = filter_comparable_records(records, records[-1])
+        buckets = aggregate(comparable, metric_key, granularity)
         buckets = filter_to_window(buckets, granularity, window)
         if not buckets:
             st.info(t("no_history"))
@@ -424,7 +467,7 @@ def render_trends_section(records: list[dict]):
                 norm_value = float(STATUS_THRESHOLDS["optimal"])
                 accepted_band = (norm_value, 100.0)
             else:
-                norm = get_norms().get(metric_key)
+                norm = record_norms(records[-1]).get(metric_key)
                 domain = None
                 norm_value = norm.max if (norm and norm.max is not None) else (norm.min if norm else None)
                 accepted_band = None
@@ -439,6 +482,7 @@ def render_trends_section(records: list[dict]):
             ))
             if norm_value is not None:
                 md(f'<div class="vx-hero-caption">- - - {t("trend_norm_line")}: {norm_value:g}</div>')
+            md(f'<div class="vx-hero-caption">{t("trend_protocol_note")}</div>')
 
 
 # ===========================================================================
@@ -484,6 +528,11 @@ def _render_capture_step(
 def render_capture_flow():
     step = st.session_state.capture_step
 
+    if "last_error" in st.session_state:
+        st.error(t("error"))
+        with st.expander(t("qa_expander")):
+            st.code(st.session_state["last_error"])
+
     if step == 1:
         sv_accepted = _render_capture_step(
             1, "capture_sv_title", t("capture_vowel_prompt"),
@@ -499,10 +548,6 @@ def render_capture_flow():
             2, "capture_cs_title", reading_passage(),
             "cs", "cs_record_label", "cs_upload_label",
         )
-        if "last_error" in st.session_state:
-            st.error(t("error"))
-            with st.expander(t("qa_expander")):
-                st.code(st.session_state["last_error"])
         if cs_accepted is not None:
             with st.spinner(t("capture_analyzing_message")):
                 run_analysis(st.session_state["sv_bytes"], cs_accepted)
@@ -526,8 +571,24 @@ def render_congrats_screen():
 
 def run_analysis(sv_bytes: bytes, cs_bytes: bytes):
     try:
-        sv_sound = load_wav_bytes(sv_bytes)
-        cs_sound = load_wav_bytes(cs_bytes)
+        raw_sv_sound = load_wav_bytes(sv_bytes)
+        raw_cs_sound = load_wav_bytes(cs_bytes)
+        standardized = standardize_pair(raw_sv_sound, raw_cs_sound)
+        if not standardized.is_analysable:
+            st.session_state["last_error"] = protocol_error_message(standardized)
+            if standardized.sv.sound is None:
+                clear_accepted("sv")
+                clear_accepted("cs")
+                st.session_state.pop("sv_bytes", None)
+                st.session_state.capture_step = 1
+            else:
+                clear_accepted("cs")
+            st.rerun()
+            return
+
+        sv_sound = standardized.sv.sound
+        cs_sound = standardized.cs.sound
+        assert sv_sound is not None and cs_sound is not None
         combined_sound = concatenate(sv_sound, cs_sound)
 
         single_params = analyze_single_parameters(sv_sound, cs_sound, combined_sound)
@@ -536,12 +597,24 @@ def run_analysis(sv_bytes: bytes, cs_bytes: bytes):
 
         parameters = single_params.as_dict()
         indices = {"avqi": avqi_result.avqi, "abi": abi_result.abi}
-        norms = flag_all({**parameters, **indices})
+        active_norms = get_norms()
+        norms = flag_all({**parameters, **indices}, active_norms)
+        voice_quality_score = composite_stimm_score({**parameters, **indices}, active_norms)
+        analysis_meta = build_analysis_metadata(
+            standardized=standardized,
+            sv_capture=st.session_state.get("sv_capture_meta"),
+            cs_capture=st.session_state.get("cs_capture_meta"),
+            avqi_result=avqi_result,
+            abi_result=abi_result,
+            norms=active_norms,
+            voice_quality_score=voice_quality_score,
+        )
 
         sample_meta = {
             "sv_seconds": sv_sound.duration,
             "cs_seconds": cs_sound.duration,
             "sample_rate_hz": combined_sound.sampling_frequency,
+            "analysis_meta": analysis_meta,
         }
 
         store, daily_store = _record_store()

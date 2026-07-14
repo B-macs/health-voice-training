@@ -21,7 +21,11 @@ import random
 import numpy as np
 import pytest
 from scipy.stats import pearsonr
-from sklearn.metrics import roc_auc_score
+sklearn_metrics = pytest.importorskip(
+    "sklearn.metrics",
+    reason="scikit-learn is an optional validation-only dependency; install requirements-dev.txt",
+)
+roc_auc_score = sklearn_metrics.roc_auc_score
 
 from tests.vqd_utils import MANIFEST_PATH, load_manifest, analyze_vqd_recording
 

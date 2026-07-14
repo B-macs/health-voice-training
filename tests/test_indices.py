@@ -5,9 +5,12 @@ analysis/indices.py docstring)."""
 import math
 
 import pytest
+import json
+from pathlib import Path
 
 from analysis.audio_io import concatenate
 from analysis.indices import compute_avqi, compute_abi
+from analysis.norms import get_norms
 
 
 def _assert_finite_0_10(name, value):
@@ -25,6 +28,21 @@ def test_abi_finite_and_bounded(clean_sv, clean_cs):
     combined = concatenate(clean_sv, clean_cs)
     result = compute_abi(combined)
     _assert_finite_0_10("abi", result.abi)
+
+
+def test_breathiness_threshold_has_one_model_source_of_truth():
+    model = json.loads((Path(__file__).parent.parent / "analysis" / "abi_vqd_model.json").read_text(encoding="utf-8"))
+    assert get_norms()["abi"].max == model["decision_threshold_0_10"] == 2.10
+
+
+def test_indices_expose_raw_and_display_values_for_provenance(clean_sv, clean_cs):
+    combined = concatenate(clean_sv, clean_cs)
+    avqi = compute_avqi(combined).as_dict()
+    abi = compute_abi(combined).as_dict()
+
+    assert "raw_avqi" in avqi and "was_clipped" in avqi
+    assert "raw_abi" in abi and "feature_z_scores" in abi
+    assert isinstance(abi["out_of_distribution"], bool)
 
 
 def test_avqi_gain_invariance(clean_sv, clean_cs):

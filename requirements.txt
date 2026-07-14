@@ -1,6 +1,9 @@
-streamlit>=1.38
-praat-parselmouth>=0.4.3
-numpy>=1.26
-scipy>=1.11
-soundfile>=0.12
-imageio-ffmpeg>=0.5
+# Pin the tested runtime. Praat/parselmouth and DSP dependencies can change
+# acoustic output between releases, so a voice-history trend needs a
+# reproducible environment rather than broad minimum versions.
+streamlit==1.59.2
+praat-parselmouth==0.4.7
+numpy==2.4.3
+scipy==1.17.1
+soundfile==0.14.0
+imageio-ffmpeg==0.6.0

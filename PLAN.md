@@ -1,10 +1,19 @@
 # Voxplot Prototype — PLAN.md
 
-Standalone, headless voice-acoustics prototype. Captures a sustained vowel [a:]
-and a continuous-speech sample, computes 14 single acoustic parameters plus
-AVQI and ABI (0–10 each), and logs one structured JSON record per session.
-No AI. No display of results to the end user beyond a hidden QA expander.
-App language is German (`config.py`, `LANGUAGE = "de"`) throughout.
+Standalone voice-acoustics prototype. It captures a sustained vowel [a:] and
+a continuous-speech sample, quality-checks and standardizes a three-second
+window from each, computes 14 single acoustic parameters plus an AVQI-like
+index and custom breathiness estimate, and logs one non-audio-provenanced
+record per session. No AI. The app has a patient-facing dashboard, including
+the retained personal Voice Quality score and a technical-record expander.
+UI language and analysis language are separate `config.py` settings.
+
+> **Audit correction, 2026-07-14:** read
+> [`docs/voice_quality_measurement_policy.md`](docs/voice_quality_measurement_policy.md)
+> before relying on older validation wording below. It supersedes the former
+> claims that 2.70 was the German v03.01 cutoff and that this project has
+> reference-script parity. It also records the protocol-v2, provenance,
+> quality, legacy-history, and model-threshold decisions.
 
 ## Status legend
 green = tested & verified · yellow = works but unverified/approximate · red = broken/unknown
@@ -30,14 +39,15 @@ AVQIv3 = [4.152 − 0.177·CPPs − 0.006·HNR − 0.037·Shim% + 0.941·ShdB
 ```
 Source: Barsties v Latoszek et al., PMC10743486. On 362 real SVD recordings:
 healthy median 2.43, Hyperfunktionelle Dysphonie 3.24, Hypofunktionelle
-Dysphonie 3.27 — correctly separated at the German cutoff (2.70). Sample-level
-report: `reports/svd_validation_report.md` (AUC 0.761, sens 0.73/spec 0.71 at
-cutoff, n=40, smaller pytest-sized sample). **Status: green** (formula-level
-parity + real-data discrimination both verified; sub-measure Praat settings
-not fully pinned down in the source papers remain yellow individually — see
-Praat call recipes table below — but the composite index behaves correctly).
+Dysphonie 3.27 on the historical SVD evaluation. This is useful
+discrimination evidence, **not reference-script parity**. The German v03.01
+paper reports a 1.85 cutoff for its equalised/reference protocol; Voxplot's
+2.70 boundary remains a personal-trend reference only until matched-output
+parity is demonstrated. **Status: yellow** (published coefficient
+implementation and real-data discrimination exist; capture/DSP parity and
+clinical cutoff transfer remain unverified).
 
-### ABI — NOT the published formula; three-stage investigation, now resolved
+### ABI — NOT the published formula; four-stage investigation
 
 **Stage 1 — published formula**, reimplemented the same way as AVQI:
 ```
@@ -75,17 +85,19 @@ answered with real ground truth (`tests/fit_abi_vqd.py`):
      rather than binary target)? Reasonably well: r = 0.591 (GRBAS-B) /
      0.584 (CAPE-V-B), both p < 1e-27.
   3. **Does fitting directly on VQD's real ratings do better?** Yes,
-     substantially: 5-fold CV Pearson r = 0.814 (RMSE 0.451 on the 0–3
-     scale), AUC 0.894 for detecting any breathiness (GRBAS-B > 0.5), clean
+     substantially: the original OLS fit had 5-fold CV Pearson r = 0.814
+     (RMSE 0.451 on the 0–3 scale), AUC 0.894 for detecting any breathiness
+     (GRBAS-B > 0.5), clean
      monotonic category separation (Normal 1.10, Mild 2.57, Moderate 6.07,
      Severe 7.03, rescaled to 0–10).
 
-`compute_abi` now uses this VQD-fitted linear regression (coefficients in
+`compute_abi` now uses a VQD-fitted Lasso regression (coefficients in
 `analysis/abi_vqd_model.json`), predicting continuous GRBAS-Breathiness and
-rescaling 0–3 → 0–10. German "abi" cutoff in `analysis/norms.py` updated to
-this model's own Youden-optimal threshold (2.0; AUC 0.894, sens 0.83, spec
-0.80) — not German-specific (VQD is American English) but the best available
-pending a German breathiness validation. Applying it back to SVD gives
+rescaling 0–3 → 0–10. The Lasso refit is Stage 4: it avoids the OLS
+multicollinearity sign flip and records its 2.10 operating threshold, AUC
+0.888, sensitivity 0.81, and specificity 0.82 in the model JSON. It is not
+German-specific (VQD is American English) and remains pending matched mobile
+German external validation. Applying it back to SVD gives
 correctly-ordered but compressed scores (healthy 0.00, Hyperfunktionelle
 0.66, Hypofunktionelle 0.60), consistent with SVD's dysphonia categories not
 being primarily about breathiness. **Status: green** — fit on the actual
@@ -127,14 +139,16 @@ full detail.
 
 ## File layout
 
-- `app.py` — Streamlit capture UI (mic via `st.audio_input`, `.wav` upload), hidden QA expander, fully German
-- `config.py` — single source of truth: `LANGUAGE = "de"`, reading passage, all UI strings
+- `app.py` — Streamlit capture UI/dashboard (mic via `st.audio_input`, `.wav` upload), technical record, independent UI/analysis language
+- `config.py` — UI language, analysis language, reading passage, score and display metadata
 - `analysis/parselmouth_metrics.py` — 14 single parameters
 - `analysis/indices.py` — AVQI (formula reimplementation) + ABI (VQD-fitted regression, see above)
 - `analysis/abi_svd_model.json` — Stage-2 SVD-fitted model (kept for reference/comparison, no longer used by `compute_abi`)
 - `analysis/abi_vqd_model.json` — Stage-3 VQD-fitted model, the one `compute_abi` actually loads (regenerate via `tests/fit_abi_vqd.py`)
-- `analysis/norms.py` — norm values + in/out-of-range flagging; `get_norms(language)` seam, German cutoffs wired to `LANGUAGE`
-- `storage/logger.py` — append structured record to JSONL; thin interface for future backend swap
+- `analysis/recording_protocol.py` — deterministic three-second window selection + non-audio recording QC
+- `analysis/provenance.py` — model/runtime/protocol metadata stored with every v2 record
+- `analysis/norms.py` — versioned reference boundaries + in/out-of-range flagging; `get_norms(language)` seam
+- `storage/logger.py` — append structured record to JSONL; local-date-aware, chronology-sorted history
 - `praat_scripts/` — kept for future drop-in of a licensed official script (currently empty + README); none exists to drop in as of this session
 - `tests/` — unit tests (G3/G4/G6) + SVD/VQD validation suites (see below)
   - `build_svd_manifest.py` → `svd_manifest.csv` (P1); `svd_utils.py` — NSP→WAV cache, manifest loading, stratified sampling, `analyze_recording`; `run_svd_batch.py` → `svd_results.csv`; `fit_abi_svd.py` → `abi_svd_model.json` (Stage 2)
@@ -148,8 +162,8 @@ full detail.
 
 ## Dependencies
 
-App runtime (`requirements.txt`): streamlit 1.59.0 · praat-parselmouth 0.4.7 ·
-numpy 2.4.6 · scipy 1.17.1 · soundfile 0.14.0. Dev/validation only
+App runtime (`requirements.txt`, pinned for reproducible DSP): streamlit 1.59.2 · praat-parselmouth 0.4.7 ·
+numpy 2.4.3 · scipy 1.17.1 · soundfile 0.14.0 · imageio-ffmpeg 0.6.0. Dev/validation only
 (`requirements-dev.txt`): pytest 9.1.1 · nspfile 0.2.0 · scikit-learn 1.9.0 ·
 pandas 3.0.3 · openpyxl 3.1.5. Python 3.11.9, isolated venv at `.venv/`.
 
@@ -183,10 +197,10 @@ pandas 3.0.3 · openpyxl 3.1.5. Python 3.11.9, isolated venv at `.venv/`.
 - P1 Manifest built, counts sane — **green** (SVD: 12,783 files / 917 recordings, `tests/svd_manifest.csv`; VQD: 296/296 recordings matched to ratings, `tests/vqd_manifest.csv`)
 - P2 Validated AVQI/ABI scripts confirmed present — **N/A, confirmed absent**; session proceeded per user direction to fit from real data instead (see Architecture decision)
 - P3 Parity harness — **N/A** (no reference script); replaced by the discrimination (P4) and VQD correlation (Stage 3 ABI) harnesses
-- P4 Discrimination: healthy below / dysphonia above German cutoff, saved report — **green** (`tests/test_discrimination.py`, `reports/svd_validation_report.md`); **ABI gate specifically finished** using VQD's real perceptual breathiness ratings (`tests/test_vqd_validation.py`) — see Architecture decision, Stage 3
+- P4 Historical discrimination: SVD ordering and a saved report exist, but do **not** establish reference-script parity or a transferable German clinical cutoff; current status **yellow**. ABI's VQD evidence is separately documented, with its current Lasso model/threshold in `analysis/abi_vqd_model.json` and the policy document.
 - P5 Large archives streamed, no OOM — **green** (individual `.nsp`/`.wav` files read one at a time; multi-GB zips pre-extracted to disk, never fully loaded into memory)
 - P6 pytest green from fresh venv; G5 documented — **green**
-- P7 German app-wide: single `LANGUAGE="de"` config drives reading passage + UI + cutoffs — **green**; grepped `app.py` for hardcoded UI strings, none remain outside `config.py`
+- P7 Language/config: UI language and analysis language are deliberately separate in `config.py`; protocol, passage, and reference metadata are persisted with each record. This supersedes the former single-`LANGUAGE` statement.
 
 ## Phase 2 (not built now, not blocked)
 

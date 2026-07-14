@@ -21,9 +21,25 @@ Norms with no established single cutoff are stored with "note" only and
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from pathlib import Path
 from typing import Optional
 
 from config import ANALYSIS_LANGUAGE
+
+
+AVQI_GERMAN_V03_01_PAPER_CUTOFF = 1.85
+ACTIVE_AVQI_REFERENCE_CUTOFF = 2.70
+_ABI_MODEL_PATH = Path(__file__).with_name("abi_vqd_model.json")
+
+
+# DETERMINISTIC: read the deployed breathiness threshold from its model artifact; fallback raises on a malformed artifact.
+def _vqd_breathiness_threshold() -> float:
+    model = json.loads(_ABI_MODEL_PATH.read_text(encoding="utf-8"))
+    return float(model["decision_threshold_0_10"])
+
+
+VQD_BREATHINESS_REFERENCE_CUTOFF = _vqd_breathiness_threshold()
 
 
 @dataclass
@@ -68,30 +84,24 @@ DEFAULT_NORMS: dict[str, NormRange] = {
     "ltas_tilt_db": NormRange(note="No single universal cutoff; used comparatively/within AVQI."),
     "gne": NormRange(min=0.5, note="Values closer to 1 = more periodic/less breathy; <0.5 often associated with breathiness."),
     "h1_h2_db": NormRange(note="No single universal cutoff; more positive = more breathy, but strongly register/gender dependent."),
-    "avqi": NormRange(max=2.85, note="Widely cited international default cutoff (Maryn & Weenink); validated cutoffs vary by language (~1.8-3.5)."),
-    "abi": NormRange(max=2.10, note="Youden-optimal threshold of our VQD-fitted Lasso regression (tests/fit_abi_vqd_lasso.py) for any perceived breathiness (AUC 0.888, sens 0.81, spec 0.82) -- NOT the Barsties published ABI's Dutch cutoff, which validated a formula this project no longer uses (proved broken against real ratings). See analysis/indices.py module docstring."),
+    "avqi": NormRange(max=2.85, note="Indicative international reference only; validated cutoffs vary by language and implementation (~1.8-3.5)."),
+    "abi": NormRange(max=VQD_BREATHINESS_REFERENCE_CUTOFF, note="Reference threshold stored in the deployed VQD-fitted Lasso model for any perceived breathiness (AUC 0.888, sens 0.81, spec 0.82). This is a custom Voxplot breathiness estimate, not the published ABI, and is not German phone-recording validation."),
 }
 
-# AVQI: German-validated cutoff (Barsties v Latoszek et al., "Validation of
-# the Acoustic Voice Quality Index Version 03.01 and Acoustic Breathiness
-# Index in German", J Voice 2020): sensitivity 79%, specificity 92%, AUC 0.888.
-# ABI: NOT the German literature cutoff (3.42) -- that was validated for
-# Barsties' published formula, which analysis/indices.py no longer uses
-# (proved broken even against real perceptual breathiness ratings, not just
-# SVD's coarse diagnosis labels -- see its module docstring). This is the
-# Youden-optimal threshold (2.10 on the rescaled 0-10 scale) for detecting
-# "any breathiness present" (GRBAS-Breathiness > 0.5) using our VQD-fitted
-# Lasso regression (tests/fit_abi_vqd_lasso.py): AUC 0.888, sensitivity 0.81,
-# specificity 0.82. Fit on real (American English) perceptual ratings, not
-# German-specific, so used as the general default too (see DEFAULT_NORMS)
-# pending a German-specific breathiness validation. Re-derive by re-running
-# fit_abi_vqd_lasso.py if the model is refit again (previously
-# tests/fit_abi_vqd.py's plain-OLS fit -- superseded after a real user's
-# confirmed-breathy case exposed a multicollinearity sign-flip between
-# shimmer_local_db/shimmer_local_pct; see analysis/indices.py docstring).
+# The German AVQI v03.01 paper reports 1.85 (72% sensitivity / 90%
+# specificity) for its equalised 3 s sustained-vowel + 3 s voiced-speech
+# protocol. Voxplot's coefficient reimplementation has not yet been
+# benchmarked against the licensed reference script, so it must not claim
+# that paper's diagnostic cutoff. The active 2.70 boundary is deliberately
+# retained as a versioned personal-trend reference to preserve historical
+# Voice Quality continuity while a parity study is outstanding.
+#
+# The breathiness threshold belongs to the model JSON rather than being
+# duplicated here. It remains a VQD-trained American-English reference,
+# not the German published ABI cutoff of 3.42 nor a German-phone validation.
 GERMAN_NORMS_OVERRIDE: dict[str, NormRange] = {
-    "avqi": NormRange(max=2.70, note="German validation cutoff (Barsties v Latoszek et al. 2020, J Voice): sensitivity 79%, specificity 92%, AUC=0.888."),
-    "abi": NormRange(max=2.10, note="Youden-optimal threshold of our VQD-fitted Lasso regression (tests/fit_abi_vqd_lasso.py) for detecting any perceived breathiness, NOT the Barsties German literature cutoff -- see analysis/indices.py module docstring. AUC 0.888, sensitivity 0.81, specificity 0.82. Not German-specific (VQD is American English)."),
+    "avqi": NormRange(max=ACTIVE_AVQI_REFERENCE_CUTOFF, note="Versioned Voxplot personal-trend reference, retained for Voice Quality continuity. The German AVQI v03.01 paper reports 1.85 with its own equalised/reference-script protocol; Voxplot parity is not established, so this is not a diagnostic cutoff."),
+    "abi": NormRange(max=VQD_BREATHINESS_REFERENCE_CUTOFF, note="Threshold comes from the deployed VQD-fitted Lasso model for a custom Voxplot breathiness estimate (AUC 0.888, sens 0.81, spec 0.82). It is not the published ABI or a German-specific phone-recording cutoff."),
 }
 
 NORMS_BY_LANGUAGE: dict[str, dict[str, NormRange]] = {

@@ -8,7 +8,7 @@ from __future__ import annotations
 from analysis.norms import flag_all
 from storage.daily_averages import DailyAverageStore, daily_average_records
 from storage.logger import JsonlRecordStore, REQUIRED_PARAMETER_KEYS, log_session
-from ui.aggregation import aggregate, latest_and_prior_averages
+from ui.aggregation import aggregate, filter_comparable_records, latest_and_prior_averages
 
 
 def _record(timestamp: str, avqi: float, abi: float = 1.0) -> dict:
@@ -31,7 +31,14 @@ def test_single_recording_day_is_that_reading():
     assert daily[0]["n"] == 1
 
 
-def test_multiple_same_day_recordings_average():
+def test_daily_grouping_uses_recorded_local_date():
+    # 23:30 UTC is already the next calendar day in the recorded Europe/Berlin timezone.
+    records = [_record("2025-01-06T23:30:00+00:00", avqi=2.5)]
+    daily = daily_average_records(records)
+    assert daily[0]["date"] == "2025-01-07"
+
+
+def test_multiple_same_day_recordings_use_median():
     records = [
         _record("2025-01-06T09:00:00+00:00", avqi=1.0),
         _record("2025-01-06T14:00:00+00:00", avqi=3.0),
@@ -39,8 +46,19 @@ def test_multiple_same_day_recordings_average():
     ]
     daily = daily_average_records(records)
     assert len(daily) == 1
-    assert daily[0]["indices"]["avqi"] == 3.0  # mean(1,3,5)
+    assert daily[0]["indices"]["avqi"] == 3.0  # median(1,3,5)
     assert daily[0]["n"] == 3
+
+
+def test_multiple_same_day_recordings_resist_one_outlier():
+    records = [
+        _record("2025-01-06T09:00:00+00:00", avqi=1.0),
+        _record("2025-01-06T14:00:00+00:00", avqi=1.0),
+        _record("2025-01-06T20:00:00+00:00", avqi=10.0),
+    ]
+    daily = daily_average_records(records)
+    assert daily[0]["indices"]["avqi"] == 1.0
+    assert daily[0]["spread"]["indices"]["avqi"] == {"min": 1.0, "max": 10.0, "n": 3}
 
 
 def test_week_view_does_not_let_a_redone_day_outweigh_a_single_reading_day():
@@ -103,6 +121,41 @@ def test_latest_and_prior_averages_uses_latest_raw_but_day_averaged_priors():
     latest, week_avg, month_avg = latest_and_prior_averages(records, "avqi")
     assert latest == 4.0  # the single most recent raw reading, unaveraged
     assert abs(week_avg - 5.5) < 1e-9  # mean(1.0, 10.0) across the 2 PRIOR days, excluding today
+
+
+def test_latest_and_prior_averages_uses_calendar_windows_not_record_count():
+    records = [
+        _record("2025-01-01T09:00:00+00:00", avqi=1.0),
+        _record("2025-01-10T09:00:00+00:00", avqi=5.0),
+        _record("2025-01-20T09:00:00+00:00", avqi=4.0),
+    ]
+
+    latest, week_avg, month_avg = latest_and_prior_averages(records, "avqi")
+    assert latest == 4.0
+    assert week_avg is None  # Jan 10 is outside the previous seven calendar days.
+    assert abs(month_avg - 3.0) < 1e-9
+
+
+def test_versioned_history_does_not_mix_with_legacy_in_a_new_protocol_trend():
+    legacy = _record("2025-01-06T09:00:00+00:00", avqi=1.0)
+    current = _record("2025-01-07T09:00:00+00:00", avqi=2.0)
+    current["sample_meta"]["analysis_meta"] = {
+        "protocol_version": "de_windowed_3s_v2",
+        "scoring_version": "voice_quality_v1",
+        "protocol": {"status": "usable", "analysis_allowed": True},
+    }
+
+    assert filter_comparable_records([legacy, current]) == [current]
+
+
+def test_daily_rollup_keeps_the_latest_saved_norm_snapshot():
+    first = _record("2025-01-06T09:00:00+00:00", avqi=1.0)
+    second = _record("2025-01-06T14:00:00+00:00", avqi=2.0)
+    first["norms"]["avqi"]["norm"]["max"] = 1.0
+    second["norms"]["avqi"]["norm"]["max"] = 2.0
+
+    daily = daily_average_records([first, second])
+    assert daily[0]["norms"]["avqi"]["norm"]["max"] == 2.0
 
 
 def test_log_session_persists_and_recalculates_daily_average(tmp_path):

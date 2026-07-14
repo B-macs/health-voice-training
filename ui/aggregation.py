@@ -11,7 +11,7 @@ re-tuned later.
 Day/week/month aggregation is hierarchical: aggregate() and
 latest_and_prior_averages() both reduce records to one value per calendar
 day first (storage.daily_averages.daily_average_records -- the same
-canonical per-day average that gets persisted to daily_averages.jsonl
+canonical per-day median that gets persisted to daily_averages.jsonl
 whenever a new recording is logged), THEN bucket by week/month. A day the
 user recorded 3 times (because a reading felt off) is one data point, the
 same as a day recorded once -- it never outweighs other days just for
@@ -25,10 +25,13 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
-from ui.scoring import composite_stimm_score, group_score, _as_norm_range
+from analysis.norms import get_norms
+from storage.dates import local_date, sort_records
 from storage.daily_averages import daily_average_records
+from storage.record_metadata import analysis_metadata, protocol_version, recording_quality_status, scoring_version
+from ui.scoring import composite_stimm_score, group_score, _as_norm_range
 
 
 def load_records(path: str = "voice_log.jsonl") -> list[dict]:
@@ -40,8 +43,20 @@ def load_records(path: str = "voice_log.jsonl") -> list[dict]:
             line = line.strip()
             if line:
                 records.append(json.loads(line))
-    records.sort(key=lambda r: r["timestamp"])
-    return records
+    return sort_records(records)
+
+
+# DETERMINISTIC: use a recording's saved reference ranges; fallback fills only absent legacy metrics from current defaults.
+def record_norms(record: dict) -> dict:
+    saved = record.get("norms", {})
+    defaults = get_norms()
+    keys = set(defaults) | set(saved)
+    result = {}
+    for key in keys:
+        item = saved.get(key)
+        norm = _as_norm_range(item.get("norm") if isinstance(item, dict) else item)
+        result[key] = norm if norm is not None else defaults.get(key)
+    return result
 
 
 def metric_value(record: dict, metric_key: str) -> float | None:
@@ -52,18 +67,19 @@ def metric_value(record: dict, metric_key: str) -> float | None:
     indices+norms."""
     if metric_key == "composite":
         values = {**record["parameters"], **record["indices"]}
-        norms = {k: _as_norm_range(v.get("norm")) for k, v in record["norms"].items()}
+        norms = record_norms(record)
         return composite_stimm_score(values, norms)
     if metric_key.startswith("group_"):
         values = {**record["parameters"], **record["indices"]}
-        norms = {k: _as_norm_range(v.get("norm")) for k, v in record["norms"].items()}
+        norms = record_norms(record)
         return group_score(values, norms, metric_key[len("group_"):])
     if metric_key in record["indices"]:
         return record["indices"][metric_key]
     return record["parameters"].get(metric_key)
 
 
-def period_key(dt: datetime, granularity: str) -> str:
+# DETERMINISTIC: bucket a local calendar value; fallback rejects unknown granularities.
+def period_key(dt: date | datetime, granularity: str) -> str:
     if granularity == "day":
         return dt.strftime("%Y-%m-%d")
     if granularity == "week":
@@ -93,14 +109,14 @@ def aggregate(records: list[dict], metric_key: str, granularity: str) -> list[Pe
     contributing, not the number of raw recordings."""
     import statistics
 
-    source = records if granularity == "day" else daily_average_records(records)
+    source = sort_records(records) if granularity == "day" else daily_average_records(records)
 
     buckets: dict[str, list[float]] = {}
     for record in source:
         value = metric_value(record, metric_key)
         if value is None:
             continue
-        dt = datetime.fromisoformat(record["timestamp"])
+        dt = date.fromisoformat(record["date"]) if "date" in record else local_date(record)
         key = period_key(dt, granularity)
         buckets.setdefault(key, []).append(value)
 
@@ -109,7 +125,7 @@ def aggregate(records: list[dict], metric_key: str, granularity: str) -> list[Pe
         values = buckets[period]
         result.append(PeriodBucket(
             period=period,
-            average=statistics.mean(values),
+            average=statistics.median(values) if granularity == "day" else statistics.mean(values),
             min=min(values),
             max=max(values),
             n=len(values),
@@ -175,19 +191,56 @@ def latest_and_prior_averages(records: list[dict], metric_key: str) -> tuple[flo
     averages (see module docstring), so a day with several redo recordings
     doesn't outweigh a day with one, matching how Oura shows "vs. your
     recent average"."""
-    if not records:
+    ordered = sort_records(records)
+    if not ordered:
         return None, None, None
     import statistics
 
-    latest = metric_value(records[-1], metric_key)
-    today = records[-1]["timestamp"][:10]
+    latest_record = ordered[-1]
+    latest = metric_value(latest_record, metric_key)
+    reference_day = local_date(latest_record)
 
-    daily = daily_average_records(records)
-    prior_days = [d for d in daily if d["date"] < today]
+    daily = daily_average_records(ordered)
+    week_start = reference_day - timedelta(days=7)
+    month_start = reference_day - timedelta(days=30)
+    prior_days = [
+        d for d in daily
+        if date.fromisoformat(d["date"]) < reference_day
+    ]
 
-    week_values = [v for d in prior_days[-7:] if (v := metric_value(d, metric_key)) is not None]
-    month_values = [v for d in prior_days[-30:] if (v := metric_value(d, metric_key)) is not None]
+    week_values = [
+        v for d in prior_days
+        if date.fromisoformat(d["date"]) >= week_start and (v := metric_value(d, metric_key)) is not None
+    ]
+    month_values = [
+        v for d in prior_days
+        if date.fromisoformat(d["date"]) >= month_start and (v := metric_value(d, metric_key)) is not None
+    ]
 
     week_avg = statistics.mean(week_values) if week_values else None
     month_avg = statistics.mean(month_values) if month_values else None
     return latest, week_avg, month_avg
+
+
+# DETERMINISTIC: retain only quality-checked history compatible with the newest record; fallback keeps legacy history together.
+def filter_comparable_records(records: list[dict], reference_record: dict | None = None) -> list[dict]:
+    ordered = sort_records(records)
+    if not ordered:
+        return []
+    reference = reference_record or ordered[-1]
+    reference_protocol = protocol_version(reference)
+    reference_scoring = scoring_version(reference)
+    comparable = []
+    for record in ordered:
+        if protocol_version(record) != reference_protocol or scoring_version(record) != reference_scoring:
+            continue
+        quality = recording_quality_status(record)
+        if reference_protocol != "legacy_manual_unversioned" and quality != "usable":
+            continue
+        comparable.append(record)
+    return comparable
+
+
+# DETERMINISTIC: count history excluded from the current trend; fallback reports zero for empty history.
+def incompatible_record_count(records: list[dict], reference_record: dict | None = None) -> int:
+    return max(0, len(records) - len(filter_comparable_records(records, reference_record)))

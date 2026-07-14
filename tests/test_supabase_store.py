@@ -79,6 +79,14 @@ def test_record_hash_is_stable_and_ignores_mapping_key_order():
     assert record_hash(record) == record_hash(reordered)
 
 
+def test_record_hash_includes_interpretation_changing_provenance():
+    first = _record()
+    first["sample_meta"]["analysis_meta"] = {"protocol_version": "de_windowed_3s_v2"}
+    second = _record()
+    second["sample_meta"]["analysis_meta"] = {"protocol_version": "legacy_manual_unversioned"}
+    assert record_hash(first) != record_hash(second)
+
+
 def test_append_posts_an_idempotent_record_without_returning_secrets():
     store = SupabaseRecordStore(_config())
     with patch("storage.supabase.urlopen", return_value=_Response()) as urlopen_mock:
@@ -91,6 +99,20 @@ def test_append_posts_an_idempotent_record_without_returning_secrets():
     assert request.get_header("Prefer") == "resolution=ignore-duplicates,return=minimal"
     assert payload["recorded_at"] == _record()["timestamp"]
     assert payload["record_hash"] == record_hash(_record())
+
+
+def test_append_preserves_nested_non_audio_provenance():
+    record = _record()
+    record["sample_meta"]["analysis_meta"] = {
+        "protocol_version": "de_windowed_3s_v2",
+        "capture": {"raw_audio_stored": False},
+    }
+    store = SupabaseRecordStore(_config())
+    with patch("storage.supabase.urlopen", return_value=_Response()) as urlopen_mock:
+        store.append(record)
+
+    payload = json.loads(urlopen_mock.call_args.args[0].data.decode("utf-8"))
+    assert payload["sample_meta"]["analysis_meta"] == record["sample_meta"]["analysis_meta"]
 
 
 def test_read_all_reconstructs_existing_record_shape():

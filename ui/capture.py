@@ -23,11 +23,27 @@ from config import t
 from ui.styles import COLORS
 from ui.html_utils import flatten
 from analysis.audio_io import ensure_wav_bytes
+from analysis.recording_protocol import TARGET_SECONDS
 
 
 def wav_duration_seconds(audio_bytes: bytes) -> float:
     info = sf.info(io.BytesIO(audio_bytes))
     return float(info.frames) / float(info.samplerate)
+
+
+# DETERMINISTIC: identify a coarse browser/upload container from magic bytes; fallback is "unknown".
+def detect_audio_container(audio_bytes: bytes) -> str:
+    if audio_bytes.startswith(b"RIFF") and audio_bytes[8:12] == b"WAVE":
+        return "wav"
+    if audio_bytes.startswith(b"\x1a\x45\xdf\xa3"):
+        return "webm_or_matroska"
+    if audio_bytes.startswith(b"OggS"):
+        return "ogg"
+    if audio_bytes.startswith(b"ID3") or audio_bytes[:2] == b"\xff\xfb":
+        return "mp3"
+    if len(audio_bytes) >= 12 and audio_bytes[4:8] == b"ftyp":
+        return "mp4_or_m4a"
+    return "unknown"
 
 
 def _write_wav(data: np.ndarray, sr: int) -> bytes:
@@ -78,8 +94,12 @@ def render_waveform_bars(audio_bytes: bytes) -> None:
 def _reset_sample_state(prefix: str) -> None:
     version = st.session_state.get(f"{prefix}_widget_version", 0)
     st.session_state[f"{prefix}_widget_version"] = version + 1
-    for suffix in ("last_raw", "source_bytes", "trim", "accepted", "accepted_trim"):
+    for suffix in (
+        "last_raw", "source_bytes", "trim", "accepted", "accepted_trim", "capture_meta",
+        "source_kind", "source_container", "source_duration_seconds", "server_truncated",
+    ):
         st.session_state.pop(f"{prefix}_{suffix}", None)
+    st.session_state.pop("last_error", None)
 
 
 def reset_capture_state(*prefixes: str) -> None:
@@ -125,14 +145,20 @@ def render_sample_capture(
             # "already handled" while leaving stale source/accepted state
             # from a previous, unrelated recording in place.
             wav_bytes = ensure_wav_bytes(raw_bytes)
+            original_duration = wav_duration_seconds(wav_bytes)
             truncated = truncate_to_max_seconds(wav_bytes, max_seconds)
             duration = round(wav_duration_seconds(truncated), 2)
 
             st.session_state[f"{prefix}_last_raw"] = raw_bytes
             st.session_state[f"{prefix}_source_bytes"] = truncated
             st.session_state[f"{prefix}_trim"] = (0.0, duration)
+            st.session_state[f"{prefix}_source_kind"] = "upload" if upload is not None else "microphone"
+            st.session_state[f"{prefix}_source_container"] = detect_audio_container(raw_bytes)
+            st.session_state[f"{prefix}_source_duration_seconds"] = round(original_duration, 4)
+            st.session_state[f"{prefix}_server_truncated"] = original_duration > max_seconds
             st.session_state.pop(f"{prefix}_accepted", None)
             st.session_state.pop(f"{prefix}_accepted_trim", None)
+            st.session_state.pop(f"{prefix}_capture_meta", None)
 
         source_bytes = st.session_state[f"{prefix}_source_bytes"]
         duration = round(wav_duration_seconds(source_bytes), 2)
@@ -141,6 +167,7 @@ def render_sample_capture(
         return None
 
     render_waveform_bars(source_bytes)
+    st.caption(t("capture_protocol_hint"))
 
     if duration <= 0.05:
         st.warning(t("capture_too_short"))
@@ -155,6 +182,7 @@ def render_sample_capture(
     )
     st.session_state[f"{prefix}_trim"] = (start, end)
     selection_bytes = trim_wav_bytes(source_bytes, start, end)
+    selection_seconds = end - start
 
     col1, col2 = st.columns(2)
     with col1:
@@ -168,6 +196,7 @@ def render_sample_capture(
         if st.session_state.get(f"{prefix}_accepted_trim") != (start, end):
             st.session_state.pop(f"{prefix}_accepted", None)
             st.session_state.pop(f"{prefix}_accepted_trim", None)
+            st.session_state.pop(f"{prefix}_capture_meta", None)
 
     if st.session_state.get(f"{prefix}_accepted") is not None:
         st.success(t("capture_accepted_label"))
@@ -179,8 +208,22 @@ def render_sample_capture(
             st.rerun()
     with b2:
         if st.button(t("capture_accept"), key=f"{prefix}_accept", type="primary", use_container_width=True):
-            st.session_state[f"{prefix}_accepted"] = selection_bytes
-            st.session_state[f"{prefix}_accepted_trim"] = (start, end)
-            st.rerun()
+            if selection_seconds + 1e-9 < TARGET_SECONDS:
+                st.warning(t("capture_selection_too_short"))
+            else:
+                st.session_state[f"{prefix}_accepted"] = selection_bytes
+                st.session_state[f"{prefix}_accepted_trim"] = (start, end)
+                st.session_state[f"{prefix}_capture_meta"] = {
+                    "source_kind": st.session_state.get(f"{prefix}_source_kind", "unknown"),
+                    "source_container": st.session_state.get(f"{prefix}_source_container", "unknown"),
+                    "source_duration_seconds": st.session_state.get(f"{prefix}_source_duration_seconds"),
+                    "server_max_seconds": max_seconds,
+                    "server_truncated": st.session_state.get(f"{prefix}_server_truncated", False),
+                    "manual_selected_start_seconds": round(start, 4),
+                    "manual_selected_end_seconds": round(end, 4),
+                    "manual_selected_seconds": round(selection_seconds, 4),
+                    "device_metadata": "not_available_from_streamlit",
+                }
+                st.rerun()
 
     return st.session_state.get(f"{prefix}_accepted")

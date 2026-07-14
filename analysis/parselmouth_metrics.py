@@ -23,6 +23,24 @@ PERIOD_CEILING = 0.02
 MAX_PERIOD_FACTOR = 1.3
 MAX_AMPLITUDE_FACTOR = 1.6
 
+# Frozen, explicit CPPS recipe. Praat documents that subtracting the trend
+# before smoothing changes CPPS whenever smoothing is active. This existing
+# True setting is retained for score continuity until a reference-script
+# parity study can justify a versioned change.
+CPPS_SETTINGS = {
+    "subtract_trend_before_smoothing": True,
+    "time_averaging_window_seconds": 0.01,
+    "quefrency_averaging_window_seconds": 0.001,
+    "pitch_floor_hz": 60,
+    "pitch_ceiling_hz": 330,
+    "tolerance": 0.05,
+    "interpolation": "parabolic",
+    "trend_line_lower_quefrency_seconds": 0.001,
+    "trend_line_upper_quefrency_seconds": 0,
+    "trend_type": "Straight",
+    "fit_method": "Robust",
+}
+
 
 def _point_process(sound: parselmouth.Sound) -> parselmouth.Data:
     return call(sound, "To PointProcess (periodic, cc)", PITCH_FLOOR, PITCH_CEILING)
@@ -72,10 +90,25 @@ def compute_hnr(sound: parselmouth.Sound) -> float:
 def compute_cpps(sound: parselmouth.Sound) -> float:
     pcg = call(sound, "To PowerCepstrogram", 60, 0.002, 5000, 50)
     cpps = call(
-        pcg, "Get CPPS", True, 0.01, 0.001, 60, 330, 0.05,
-        "parabolic", 0.001, 0, "Straight", "Robust",
+        pcg, "Get CPPS",
+        CPPS_SETTINGS["subtract_trend_before_smoothing"],
+        CPPS_SETTINGS["time_averaging_window_seconds"],
+        CPPS_SETTINGS["quefrency_averaging_window_seconds"],
+        CPPS_SETTINGS["pitch_floor_hz"],
+        CPPS_SETTINGS["pitch_ceiling_hz"],
+        CPPS_SETTINGS["tolerance"],
+        CPPS_SETTINGS["interpolation"],
+        CPPS_SETTINGS["trend_line_lower_quefrency_seconds"],
+        CPPS_SETTINGS["trend_line_upper_quefrency_seconds"],
+        CPPS_SETTINGS["trend_type"],
+        CPPS_SETTINGS["fit_method"],
     )
     return float(cpps)
+
+
+# DETERMINISTIC: expose the frozen CPPS recipe for record provenance; fallback returns a copy.
+def cpps_configuration() -> dict:
+    return dict(CPPS_SETTINGS)
 
 
 def compute_ltas_slope_tilt(sound: parselmouth.Sound) -> dict:

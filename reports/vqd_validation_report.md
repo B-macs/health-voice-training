@@ -1,8 +1,25 @@
-# VQD validation report
+# VQD validation report — archived pre-Lasso snapshot
 
-The authoritative ABI validation for this project: 296 recordings from the Perceptual Voice Qualities Database (VQD), each independently rated by 3-4 expert clinicians (2 trials each) on GRBAS and CAPE-V, including Breathiness (ICC .844 interrater / .884 intrarater -- see 'Voice Samples Direct Download/Introduction, Methods and Reliability/database overview v2.pdf'). Unlike SVD, this provides the actual continuous perceptual construct ABI is supposed to predict, not a diagnosis-category proxy. See analysis/indices.py module docstring for the full three-stage investigation this resolved.
+> **Historical report, not the current deployment result.** This file was
+> generated before the production Lasso refit. Its 0.814 / 0.894 / 2.0
+> figures and category table describe the former OLS model. The current
+> runtime model is `analysis/abi_vqd_model.json`: Lasso, threshold 2.10,
+> five-fold CV Pearson r 0.809, RMSE 0.455, AUC 0.888, sensitivity 0.81, and
+> specificity 0.82. Run `python tests/generate_vqd_report.py` with the cached
+> VQD results to regenerate this report for the current model; the generator
+> now reads the model's threshold rather than hard-coding 2.0.
 
-NOTE: `vqd_fitted` below is in-sample (the deployed model was fit on all 296 of these recordings) -- the honest held-out estimate is the 5-fold CV figure reported by tests/fit_abi_vqd.py.
+The VQD source data are the authoritative perceptual breathiness dataset for
+this project: 296 recordings independently rated by 3-4 expert clinicians (2
+trials each) on GRBAS and CAPE-V, including Breathiness (ICC .844 interrater /
+.884 intrarater). Unlike SVD, this provides the actual continuous perceptual
+construct the custom Voxplot breathiness estimate targets, not a
+diagnosis-category proxy. See `analysis/indices.py` for the four-stage
+investigation.
+
+NOTE: `vqd_fitted` below is in-sample for the archived OLS model. The current
+model's out-of-fold metrics are held in its JSON artifact until this report is
+regenerated from `tests/vqd_results.csv`.
 
 Sample size: 296
 
@@ -15,7 +32,7 @@ Sample size: 296
 
 5-fold cross-validated (honest, held-out) Pearson r = 0.814 (RMSE 0.451 on the 0-3 GRBAS-B scale).
 
-## ABI (deployed model) by GRBAS-Breathiness category
+## Archived OLS model by GRBAS-Breathiness category
 
 | category | n | median | mean | min | max |
 |---|---|---|---|---|---|
