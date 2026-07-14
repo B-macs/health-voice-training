@@ -388,7 +388,7 @@ def trend_chart(
 
     uid = f"trend{abs(hash(tuple(values))) % 100000}"
     return f"""
-<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" preserveAspectRatio="none" style="width:100%;height:{height}px;">
+<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;">
   <defs>
     <linearGradient id="{uid}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="{color}" stop-opacity="0.35" />

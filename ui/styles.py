@@ -159,6 +159,16 @@ div[class*="st-key-card_"] {{
     animation: vxFadeIn 0.5s ease-out;
 }}
 
+/* The embedded Health view has a much wider content area than Voxplot's
+   standalone phone-style layout. Keep the detailed chart at a readable
+   desktop width; the SVG itself scales its height from its viewBox, so its
+   lines and labels retain their intended proportions. */
+div[class*="st-key-card_trends"] {{
+    max-width: 920px;
+    margin-left: auto;
+    margin-right: auto;
+}}
+
 @keyframes vxFadeIn {{
     from {{ opacity: 0; transform: translateY(6px); }}
     to {{ opacity: 1; transform: translateY(0); }}

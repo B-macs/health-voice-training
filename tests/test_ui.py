@@ -11,6 +11,14 @@ from datetime import datetime, timedelta, timezone
 from analysis.norms import NormRange
 from ui.scoring import goodness, abnormality, composite_stimm_score, status_word_key
 from ui.aggregation import period_key, aggregate, metric_value, period_to_ordinal
+from ui.svg_components import trend_chart
+
+
+def test_trend_chart_scales_without_distorting_its_aspect_ratio():
+    chart = trend_chart([48.0, 52.0], ["2026-06-15", "2026-07-14"])
+
+    assert 'preserveAspectRatio="xMidYMid meet"' in chart
+    assert 'style="display:block;width:100%;height:auto;"' in chart
 
 
 def test_goodness_lower_is_better_at_cutoff_is_50():
