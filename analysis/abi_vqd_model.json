@@ -1,0 +1,54 @@
+{
+  "features": [
+    "abi_sub_cpps_db",
+    "abi_sub_jitter_local_pct",
+    "abi_sub_gne_max",
+    "abi_sub_hf_noise_6000_db",
+    "abi_sub_hnr_d_db",
+    "abi_sub_h1_h2_db",
+    "abi_sub_shimmer_local_db",
+    "abi_sub_shimmer_local_pct",
+    "abi_sub_psd_s"
+  ],
+  "scaler_mean": [
+    7.741340456386888,
+    1.9476760288700867,
+    0.8814401750962191,
+    5.486243429909486,
+    18.138014314669693,
+    5.8392390169789135,
+    0.6683525603439999,
+    6.689943662357183,
+    0.0012730776520885878
+  ],
+  "scaler_scale": [
+    2.0037016738970572,
+    1.089368375718523,
+    0.07140650015342816,
+    6.0022782420104965,
+    5.588081142237502,
+    5.0845296922417536,
+    0.3183044079096584,
+    3.8355325165349408,
+    0.0005853862091179427
+  ],
+  "coefficients": [
+    -0.21372500876088107,
+    0.0,
+    -0.35558720378331055,
+    0.026676525409419335,
+    0.0,
+    0.08392044150971105,
+    0.11118502166650782,
+    -0.0,
+    -0.0703000750742093
+  ],
+  "intercept": 0.6925675675675698,
+  "lasso_alpha": 0.01,
+  "output_scale_0_3_to_0_10": 3.3333333333333335,
+  "cv_pearson_r": 0.8092440609199509,
+  "cv_rmse_grbas_scale": 0.45534504042063656,
+  "n_train": 296,
+  "method": "lasso_regression_vqd_grbas_breathiness",
+  "note": "Supersedes the plain-OLS fit (see analysis/abi_vqd_model_ols_v1_backup.json and tests/fit_abi_vqd.py) after a real user's confirmed-breathy case exposed a multicollinearity sign-flip: shimmer_local_db/shimmer_local_pct correlate at r=0.985 in training yet OLS gave them large opposite-signed coefficients, and CPPS/HNR/GNE (r=0.71-0.75) produced a smaller version of the same thing. Refit with Lasso (alpha=0.01, chosen as the smallest value where every nonzero coefficient's sign matches its own univariate correlation with real GRBAS-Breathiness) -- shimmer_local_pct and hnr_d_db are cleanly zeroed rather than left as small wrong-signed residuals. 5-fold CV Pearson r=0.809 (was 0.814 for OLS) -- a trivial cost for a materially more robust model. See tests/fit_abi_vqd_lasso.py and tests/fit_abi_vqd_ridge.py (documents why CV-tuned Ridge/Lasso alpha alone does NOT fix this -- minimizing in-sample CV error is what produced the sign-flip to begin with)."
+}

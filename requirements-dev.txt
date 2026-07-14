@@ -1,0 +1,15 @@
+-r requirements.txt
+pytest==9.1.1
+
+# SVD/VQD validation-only (tests/build_svd_manifest.py, tests/build_vqd_manifest.py,
+# tests/test_discrimination.py, tests/test_vqd_validation.py, tests/fit_abi_svd.py,
+# tests/fit_abi_vqd.py) -- not needed to run the app itself.
+nspfile==0.2.0
+scikit-learn==1.9.0
+pandas==3.0.3
+openpyxl==3.1.5
+
+# UI verification only (headless-browser screenshot testing of app.py during
+# development -- see README.md "Verifying the dashboard visually"). Not
+# needed to run the app; requires `playwright install chromium` once too.
+playwright==1.61.0

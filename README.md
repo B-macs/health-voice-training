@@ -1,0 +1,213 @@
+# Voxplot prototype (standalone voice-acoustics analysis, Oura-style dashboard)
+
+Captures a sustained vowel [a:] (~3s) and a German continuous-speech passage
+via browser mic or `.wav` upload, runs the existing headless acoustic
+analysis (14 single parameters + AVQI + ABI, 0-10 each) unchanged, logs one
+structured JSON record per session to `voice_log.jsonl`, and presents the
+results as a dark, Oura-style dashboard: a composite "Stimm-Score" hero
+ring, a 30-day trend, an acoustic-insights list, and the hexagonal Voice
+Profile radar. No AI. A raw-data "QA (Debug)" expander is available for
+verification. The app is German throughout (`config.py`, `LANGUAGE = "de"`):
+reading passage, every UI string, and AVQI/ABI cutoffs all derive from that
+one setting.
+
+See `PLAN.md` for the full architecture, the AVQI/ABI sourcing decision and
+its real-data validation, Praat call recipes, and validation-gate status.
+See `CHANGELOG.md` for root-cause notes on every fix made along the way.
+
+## Dashboard UI
+
+`app.py` is presentation only -- it reads the same `analysis/`/`storage/`
+output this project always produced and renders it; it does not reinvent
+any DSP or touch the AVQI/ABI computation.
+
+- **`config.py`** -- adds dashboard strings (tab labels, friendly metric
+  names, status words) and `METRIC_META`/`RADAR_AXES`/`COMPOSITE_METRICS`,
+  the single source of truth for which parameters group under Hoarseness
+  ("Heiserkeit") vs. Breathiness ("Behauchtheit") vs. General ("Allgemein"),
+  and which 6 feed the Voice Profile radar's axes.
+- **`ui/scoring.py`** -- the composite "Stimm-Score" (0-100, higher = better).
+  Voice metrics are mixed-direction (lower is better for AVQI/ABI/jitter/
+  shimmer, higher is better for HNR/GNE/CPPS) and judged against a
+  published threshold, not a natural 0-100 scale, so every value is mapped
+  through `goodness()`: 100 far better than its own norm cutoff, 50 exactly
+  at the cutoff, →0 far worse. The composite score is built from AVQI+ABI
+  only, not all 16 raw numbers -- they're themselves regression composites
+  of most of the others, so including both layers would double-count the
+  same signal. `abnormality()` (`100 - goodness`) drives the radar, where
+  distance from center means "how far from normal", not "how good".
+- **`ui/svg_components.py`** -- dependency-free SVG: the hero ring, the
+  AVQI/ABI gradient headline bars, range-bar rows (marker position from
+  `goodness`, color from the actual `norms.py` `in_range` boolean -- position
+  and pass/fail are deliberately decoupled), the hexagonal radar, and the
+  trend/area chart.
+- **`ui/aggregation.py`** -- Day/Week/Month rollups over `voice_log.jsonl`.
+  Every record is immutable and keyed by its ISO-8601 timestamp already;
+  the ISO year-week and calendar year-month are derived here, on read, with
+  no schema change. The norm used to flag each record is read from that
+  record's own `norms` field, not recomputed from the current config, so a
+  threshold line stays correct even if norms are re-tuned later.
+- **`ui/mock_data.py`** -- lets the dashboard be built/previewed with zero
+  real sessions logged yet. `app.py`'s `get_records()` calls
+  `ui.aggregation.load_records("voice_log.jsonl")` first and only falls
+  back to the mock fixture if that's empty -- **once you've logged one real
+  session, the mock data stops being used automatically**, no flag to flip.
+  The mock "current" session uses Brian McAuliffe's real values from the
+  reference `VOXplot_Profile_06_Nov25.pdf` export wherever that PDF gives
+  one; four parameters it doesn't report (f0, shimmer apq11) are clearly-
+  marked estimated placeholders. In/out-of-range status is computed from
+  *this app's own* validated German norms, not the reference PDF's
+  (different, stricter) cutoffs -- mixing norm systems would be incoherent.
+  This is also why the composite score reads "Auffällig" (concerning), not
+  the design mockup's illustrative "Optimal": the brief was explicit that
+  the score must not be dishonestly rosy, and ABI/CPPS genuinely breach our
+  norms for these real values. The 29 sessions before it are synthetic (a
+  plausible, mildly-declining month) -- there's no real history yet.
+
+### A Streamlit gotcha that cost real debugging time
+
+Two, if you're building more of this UI:
+
+1. `st.markdown('<div class="card">')` ... other `st.*` calls ... `st.markdown('</div>')`
+   does **not** nest the calls in between inside that div. Each
+   `st.markdown()` call is an independently-parsed DOM fragment -- the
+   unclosed `<div>` self-closes immediately and everything "inside" renders
+   as an empty, invisible sibling. Every "card" is a real
+   `st.container(key="card_...")` block instead, styled via the
+   `div[class*="st-key-card_"]` CSS attribute-selector in `ui/styles.py`.
+2. Streamlit's own responsive breakpoint stacks every `st.columns()` row
+   vertically below ~640px -- exactly this app's mobile-first target width.
+   `ui/styles.py` forces `div[data-testid="stHorizontalBlock"]` to
+   `flex-wrap: nowrap` and its `div[data-testid="stColumn"]` children to
+   `min-width: 0` so multi-column rows (the tab bar, the hero, the capture
+   flow's buttons) stay side-by-side.
+
+### Verifying the dashboard visually
+
+There's no `chromium-cli` in this environment, so verification here used
+Playwright directly:
+```bash
+pip install playwright && playwright install chromium
+```
+then a small script driving `http://localhost:<port>` (`page.goto`,
+`page.screenshot`, `page.get_by_role("button", name=...).click()`) -- see
+git history / ask for the driver script if you need to re-verify a change.
+`page.evaluate()` with `getBoundingClientRect()`/`getComputedStyle()` was
+what actually diagnosed both gotchas above; a screenshot alone showed *that*
+something was broken, not *why*.
+
+## Setup
+
+```bash
+py -3.11 -m venv .venv
+.venv\Scripts\activate        # Windows
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+Open the printed local URL -- it lands on **STIMMANALYSE** with the mock
+data fixture (see "Dashboard UI" above) until a real session is logged.
+Click **Neue Aufnahme** to record/upload both samples, then
+**Analysieren & protokollieren**; you're returned to the dashboard showing
+that real session. Check the **DETAILS** tab's "QA (Debug)" expander to see
+the raw logged JSON.
+
+## Running tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest tests/ -v
+```
+
+Core unit tests (`test_audio_io.py`, `test_metrics.py`, `test_indices.py`,
+`test_logger.py`, `test_ui.py`) run standalone, no external data needed. One test
+(`test_abi_direction_breathy_worse_than_clean`) is an expected `xfail` on a
+hand-built synthetic signal -- see `analysis/indices.py`'s module docstring
+for why (an extrapolation artifact of that specific synthetic fixture, not
+a bug in the deployed model, which is validated on real recordings from two
+independent external databases instead -- see below).
+
+### Regression/snapshot test (run this after touching `analysis/`)
+
+`test_regression_snapshot.py` is not a correctness check -- it's a
+golden-master test that freezes today's output for fixed, deterministic
+synthetic input (the same `clean_sv`/`clean_cs`/`breathy_sv`/`breathy_cs`
+fixtures other tests use) and fails loudly if *any* of the 14 parameters or
+AVQI/ABI drift, even slightly. The point is to catch an unintended side
+effect from touching one sub-measure (e.g. editing H1-H2) silently shifting
+something unrelated (e.g. CPPS) that you wouldn't otherwise notice.
+
+```bash
+pytest tests/test_regression_snapshot.py -v
+```
+
+If it fails and every value it lists is one you *meant* to change (and by
+the amount you expect) -- refresh the saved snapshot and commit it
+alongside your code change so the diff shows exactly what shifted:
+
+```bash
+UPDATE_SNAPSHOT=1 pytest tests/test_regression_snapshot.py -v
+pytest tests/test_regression_snapshot.py -v   # confirm it's green again
+```
+
+If it fails and lists something you *didn't* touch, that's a real
+regression -- go find it before committing.
+
+Two slow, opt-in validation suites depend on external data not vendored
+into the repo and skip automatically if that data isn't present locally:
+
+**SVD** (Saarbruecken Voice Database) -- AVQI discrimination against real
+diagnosis labels:
+```bash
+python tests/build_svd_manifest.py     # writes tests/svd_manifest.csv
+python tests/run_svd_batch.py 200      # writes tests/svd_results.csv (~10-15 min)
+python tests/fit_abi_svd.py            # (re)fits analysis/abi_svd_model.json (reference only, see below)
+pytest tests/test_discrimination.py -v
+python -m tests.test_discrimination    # regenerates reports/svd_validation_report.md
+```
+
+**VQD** (Perceptual Voice Qualities Database) -- ABI correlation against
+real expert perceptual breathiness ratings, the authoritative ABI
+validation (see `analysis/indices.py`'s module docstring):
+```bash
+python tests/build_vqd_manifest.py     # writes tests/vqd_manifest.csv
+python tests/run_vqd_batch.py          # writes tests/vqd_results.csv (~55 min, 296 recordings)
+python tests/fit_abi_vqd.py            # (re)fits analysis/abi_vqd_model.json -- the production ABI model
+pytest tests/test_vqd_validation.py -v # ~8 min (40-recording stratified sample)
+python tests/generate_vqd_report.py    # regenerates reports/vqd_validation_report.md (full 296 recordings)
+```
+
+## Known limitations (read before treating output as clinical-grade)
+
+- **No licensed reference script was ever obtainable** (Phonanium's AVQI/ABI
+  Praat scripts are a paid product, ~€67, with no free/open-access version
+  found). So neither AVQI nor ABI is validated as byte-for-byte parity with
+  the official script that VOXplot wraps -- both are validated against real
+  external databases instead. See PLAN.md's "Architecture decision".
+- **AVQI** is the published Barsties v Latoszek formula, reimplemented from
+  the real coefficients and confirmed to separate healthy vs. dysphonic SVD
+  voices correctly at the German cutoff (2.70). Some sub-measure Praat
+  settings not fully specified in the source papers use Praat's documented
+  defaults, not confirmed bit-for-bit against the original script.
+- **ABI is NOT the published Barsties formula.** That reimplementation was
+  built, then proved badly broken -- confirmed two ways: first against real
+  SVD diagnosis labels (healthy voices scored worse than dysphonic ones),
+  then decisively against VQD's real expert perceptual breathiness ratings
+  (Pearson r = -0.154, negative). It has been replaced with a linear
+  regression fit directly on VQD's continuous GRBAS-Breathiness ratings
+  (`tests/fit_abi_vqd.py`), the actual construct ABI is supposed to predict
+  -- 5-fold CV Pearson r=0.814, AUC 0.894 for detecting any breathiness.
+  This is a locally-calibrated breathiness discriminant validated against
+  real expert ratings with published-grade inter/intra-rater reliability,
+  not a certified reproduction of Barsties' validated ABI (different
+  raters/samples/scale calibration) -- see `analysis/indices.py`'s module
+  docstring for the full three-stage investigation.
+- **Norms in `analysis/norms.py`** are indicative defaults (German AVQI
+  cutoff from the literature; ABI cutoff from the VQD-fitted model's own
+  Youden-optimal threshold, not language-specific; other parameters are
+  general literature values), not exhaustively validated for every
+  population. Configurable per language via `get_norms(language)`.
+- **G2 (browser mic capture)** could not be fully verified in this
+  environment: the widget renders with no errors, but a live browser
+  click-through needs manual verification (no browser-automation tool was
+  available here).

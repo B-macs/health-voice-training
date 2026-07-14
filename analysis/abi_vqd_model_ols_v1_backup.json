@@ -1,0 +1,53 @@
+{
+  "features": [
+    "abi_sub_cpps_db",
+    "abi_sub_jitter_local_pct",
+    "abi_sub_gne_max",
+    "abi_sub_hf_noise_6000_db",
+    "abi_sub_hnr_d_db",
+    "abi_sub_h1_h2_db",
+    "abi_sub_shimmer_local_db",
+    "abi_sub_shimmer_local_pct",
+    "abi_sub_psd_s"
+  ],
+  "scaler_mean": [
+    7.741340456386888,
+    1.9476760288700867,
+    0.8814401750962191,
+    5.486243429909486,
+    18.138014314669693,
+    5.8392390169789135,
+    0.6683525603439999,
+    6.689943662357183,
+    0.0012730776520885878
+  ],
+  "scaler_scale": [
+    2.0037016738970572,
+    1.089368375718523,
+    0.07140650015342816,
+    6.0022782420104965,
+    5.588081142237502,
+    5.0845296922417536,
+    0.3183044079096584,
+    3.8355325165349408,
+    0.0005853862091179427
+  ],
+  "coefficients": [
+    -0.21868605268851055,
+    0.04276929967346321,
+    -0.35877551766734955,
+    0.06946103210366902,
+    0.1281988232259717,
+    0.07527204700475537,
+    0.6455316604860771,
+    -0.47959385853869446,
+    -0.07114367145836603
+  ],
+  "intercept": 0.6925675675675698,
+  "output_scale_0_3_to_0_10": 3.3333333333333335,
+  "cv_pearson_r": 0.8135253819243555,
+  "cv_rmse_grbas_scale": 0.4509496180730407,
+  "n_train": 296,
+  "method": "linear_regression_vqd_grbas_breathiness",
+  "note": "Fit directly on VQD real perceptual GRBAS-Breathiness ratings (continuous, 0-3, averaged across 3-4 expert raters x 2 trials; ICC .844 interrater/.884 intrarater) -- the same KIND of target Barsties' original ABI was fit against (though not the same raters/samples/scale calibration, so still not a reproduction of the validated ABI). See tests/fit_abi_vqd.py and analysis/indices.py."
+}

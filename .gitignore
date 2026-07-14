@@ -1,0 +1,29 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.streamlit/
+voice_log.jsonl
+daily_averages.jsonl
+training_progress.json
+*.wav
+
+# Local research datasets and generated recordings (never version-controlled)
+/.claude/
+/healthy/
+/Hyperfunktionelle Dysphonie/
+/Hypofunktionelle Dysphonie/
+/Internusschwäche/
+/Investigation/
+/Voice Samples Direct Download/
+/recordings/
+/UI Interface/
+/videos/
+*.nsp
+*.egg
+*.xlsx
+
+# Generated validation output and caches
+/tests/*_manifest.csv
+/tests/*_results.csv
+/tests/svd_wav_cache/

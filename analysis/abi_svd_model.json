@@ -1,0 +1,54 @@
+{
+  "features": [
+    "abi_sub_cpps_db",
+    "abi_sub_jitter_local_pct",
+    "abi_sub_gne_max",
+    "abi_sub_hf_noise_6000_db",
+    "abi_sub_hnr_d_db",
+    "abi_sub_h1_h2_db",
+    "abi_sub_shimmer_local_db",
+    "abi_sub_shimmer_local_pct",
+    "abi_sub_psd_s"
+  ],
+  "scaler_mean": [
+    11.675566868609348,
+    1.4495138350972776,
+    0.9129994101873001,
+    1.1033054126460526,
+    19.621107832843048,
+    5.7064924632288365,
+    0.5586411401087223,
+    5.045268512857127,
+    0.0011198863951738386
+  ],
+  "scaler_scale": [
+    1.863438574501556,
+    0.6166964782834268,
+    0.05315277249163898,
+    5.198435900251253,
+    3.131462592207892,
+    5.25442331250694,
+    0.1735661422614305,
+    2.069868733487687,
+    0.0005113205038645523
+  ],
+  "coefficients": [
+    -0.6379901736262094,
+    0.2794642227657986,
+    -0.20791449741225,
+    0.03489367040079254,
+    0.39684487712812394,
+    0.42185442100137505,
+    0.19904328634844126,
+    0.2663483655370388,
+    0.29485800591947964
+  ],
+  "intercept": -0.19794383937370175,
+  "probability_threshold": 0.40691029354703195,
+  "cv_auc": 0.7279012345679012,
+  "cv_sensitivity_at_threshold": 0.7160493827160493,
+  "cv_specificity_at_threshold": 0.63,
+  "n_train": 362,
+  "method": "logistic_regression_svd_binary_label",
+  "note": "Bespoke discriminant fit on SVD healthy-vs-any-dysphonia labels, NOT Barsties' published ABI (which was fit against continuous perceptual GRBAS-B ratings, unavailable here). See tests/fit_abi_svd.py and PLAN.md."
+}
