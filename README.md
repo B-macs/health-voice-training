@@ -16,6 +16,11 @@ before interpreting a score. It records the exact Voice Quality recipe,
 capture protocol, historical-data policy, known limitations, and required
 validation work.
 
+Read [the training activity catalogue](docs/training_activity_catalogue.md)
+before changing the training plan. It documents the 2026-07-14 low-load
+follow-on activities, their patient-profile accommodations, the latest
+quality-limited recording context, and stop rules.
+
 See `PLAN.md` for the full architecture, the AVQI/ABI sourcing decision and
 its real-data validation, Praat call recipes, and validation-gate status.
 See `CHANGELOG.md` for root-cause notes on every fix made along the way.

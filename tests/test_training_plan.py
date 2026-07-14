@@ -1,4 +1,4 @@
-"""The 10-day baseline plan: every day starts with a recording, no day
+"""The 20-day plan: every day starts with a recording, no day
 exceeds the 15-minute cap, every exercise in the pool gets used, and
 completing a day's items advances to the next day with progress
 persisted (survives closing and reopening the app). Also covers
@@ -18,9 +18,17 @@ from ui.training_plan import (
 from storage.training_progress import TrainingProgressStore
 
 
-def test_plan_has_ten_days():
-    assert len(TRAINING_PLAN) == 10
-    assert [d.day_number for d in TRAINING_PLAN] == list(range(1, 11))
+# DETERMINISTIC: validates static activity-card data and fails if the plan schema changes.
+def test_plan_has_twenty_days_and_valid_activity_templates():
+    assert len(TRAINING_PLAN) == 20
+    assert [d.day_number for d in TRAINING_PLAN] == list(range(1, 21))
+    assert len(EXERCISE_LIBRARY) == 22
+
+    activity_ids = [activity.id for activity in EXERCISE_LIBRARY]
+    assert len(activity_ids) == len(set(activity_ids))
+    for activity in EXERCISE_LIBRARY:
+        assert activity.timer_seconds > 0
+        assert len(activity.steps) == 4
 
 
 def test_every_day_starts_with_a_new_recording():
@@ -36,9 +44,12 @@ def test_every_day_stays_under_the_fifteen_minute_cap():
 
 def test_every_pool_exercise_is_scheduled_at_least_once():
     scheduled = {aid for day in TRAINING_PLAN for aid in day.activity_ids}
+    scheduled_activity_ids = scheduled - {NEW_RECORDING}
     pool_ids = {a.id for a in EXERCISE_LIBRARY}
-    missing = pool_ids - scheduled
+    missing = pool_ids - scheduled_activity_ids
     assert not missing, f"exercises never scheduled: {missing}"
+    unknown = scheduled_activity_ids - pool_ids
+    assert not unknown, f"scheduled ids missing from exercise library: {unknown}"
 
 
 def test_completing_a_day_advances_to_the_next_and_resets(tmp_path):
@@ -67,9 +78,9 @@ def test_progress_persists_across_store_instances(tmp_path):
 
 def test_plan_already_complete_is_a_noop(tmp_path):
     store = TrainingProgressStore(str(tmp_path / "training_progress.json"))
-    store.save({"day_index": 10, "completed_today": []})
+    store.save({"day_index": len(TRAINING_PLAN), "completed_today": []})
     state = mark_item_complete("anything", store=store)
-    assert state["day_index"] == 10
+    assert state["day_index"] == len(TRAINING_PLAN)
     assert state["completed_today"] == []
 
 

@@ -4,6 +4,29 @@ Root-cause notes for fixes made while validating against the Saarbruecken
 Voice Database (SVD) and the Perceptual Voice Qualities Database (VQD).
 See PLAN.md for the full architecture/gate status.
 
+## 2026-07-14 - low-load voice-training follow-on
+
+- **Ten new activity cards, no new renderer or assets.** Added Supported Voice
+  Reset, Lip Trill Ease, Voiced /v/ Flow, Nasal Resonance Ladder, Resonant
+  Phrase Carryover, Small-Step Pitch Pattern, Gentle Phrase Pacing, Easy
+  Articulation Practice, Chant-to-Speech Bridge, and Brief Voice Recovery
+  Break. Each is an existing four-step countdown Activity, so it uses the
+  same explanation, timer, results, and completion template as the original
+  pool.
+- **Original baseline preserved.** Days 1-10 are unchanged. Days 11-20 pair
+  one new, two-to-three-minute low-effort activity with a familiar exercise,
+  daily recording, and cool-down. The upper-bound duration stays at or below
+  15 minutes each day. Extending rather than rewriting the baseline lets a
+  persisted completed 10-day plan continue at Day 11.
+- **Patient-profile and recording-quality guardrails.** New cards allow a
+  supported chair or easy neutral standing position, avoid a held
+  posture-correction cue, and tell the user to change position rather than
+  push through back symptoms. They use only comfortable pitch/loudness and
+  include a recovery activity. The latest voice session was quality-limited
+  by low SNR, so no card claims that a score changed or uses its score to
+  progress the workload. See docs/training_activity_catalogue.md for
+  rationale, sources, and stop/escalation rules.
+
 ## 2026-07-14 — measurement reliability and audit corrections
 
 - **Voice Quality retained, not removed.** The existing equal-weight 0–100

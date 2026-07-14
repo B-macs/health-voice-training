@@ -82,8 +82,8 @@ UI_STRINGS = {
         "training_start_button": "Starten",
         "training_recording_category": "Aufnahme",
         "training_day_of_label": "Tag {day} von {total}",
-        "training_plan_complete_title": "10-Tage-Basisprogramm abgeschlossen!",
-        "training_plan_complete_body": "Gut durchgehalten. Sieh dir im Tab \"Details\" an, wie sich dein Trend über diese 10 Tage entwickelt hat -- das ist die Basis, auf der ein längeres Programm aufbauen kann.",
+        "training_plan_complete_title": "20-Tage-Stimmtraining abgeschlossen!",
+        "training_plan_complete_body": "Gut durchgehalten. Sieh dir im Tab \"Details\" an, wie sich dein Trend über diese 20 Tage entwickelt hat, und besprich den nächsten Block mit deiner HNO- oder Sprachtherapie-Fachperson.",
         "training_day_complete_title": "Heutiges Training abgeschlossen!",
         "training_day_complete_body": "Gut gemacht. Der nächste Tag deines Plans wird morgen freigeschaltet.",
 
@@ -212,8 +212,8 @@ UI_STRINGS = {
         "training_start_button": "Start",
         "training_recording_category": "Recording",
         "training_day_of_label": "Day {day} of {total}",
-        "training_plan_complete_title": "10-Day Baseline Complete!",
-        "training_plan_complete_body": "Nice work sticking with it. Head to the Details tab to see how your trend moved over these 10 days -- that's the baseline a longer program can build on.",
+        "training_plan_complete_title": "20-Day Voice Plan Complete!",
+        "training_plan_complete_body": "Nice work sticking with it. Head to the Details tab to review your trend across these 20 days, then use ENT or speech-language-pathologist guidance before changing the program.",
         "training_day_complete_title": "Today's Training Complete!",
         "training_day_complete_body": "Nice work. The next day of your plan unlocks tomorrow.",
 

@@ -4,16 +4,16 @@ weekly streak row, a "New Recording" button into the existing capture flow
 (unchanged -- see ui/capture.py), and a sequential "Daily plan" of cards
 (Next -> Complete, one at a time).
 
-The daily plan is driven by ui/training_plan.py's fixed 10-day baseline
-schedule, persisted via storage/training_progress.py -- "today's plan" is
-whichever day the user has reached, always starting with a recording card
-(the existing capture flow, gated first in the sequence the same way any
-other card is) followed by that day's 2-3 exercises and a cool-down.
+The daily plan is driven by ui/training_plan.py's fixed 20-day schedule,
+persisted via storage/training_progress.py -- "today's plan" is whichever day
+the user has reached, always starting with a recording card (the existing
+capture flow, gated first in the sequence the same way any other card is)
+followed by that day's two or three practice activities and a cool-down.
 Completing a day's last item advances to the next day automatically (see
 ui.training_plan.mark_item_complete), but that next day doesn't unlock
 same-day -- render_training_tab() shows a "come back tomorrow" card
 instead of a daily list until the calendar date actually changes. After
-day 10 it shows the whole-plan completion card instead.
+day 20 it shows the whole-plan completion card instead.
 
 XP is derived from *today's* completed items (len(completed_today) *
 XP_PER_ACTIVITY), so it resets when the plan advances to a new day --

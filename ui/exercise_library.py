@@ -38,6 +38,15 @@ program the ENT/SLP prescribed for the 5 sessions that worked isn't known
 here in detail, and a follow-up ENT visit is already scheduled. Treat
 this as something to review with that clinician, not a finalized
 prescription.
+
+The 2026-07-14 expansion keeps every new activity short and low effort.
+It is designed to be done in a supported chair with feet supported or an
+easy neutral standing position, with permission to change position at any
+time. That accommodates the active Stage-1 back flare and generalized
+hypermobility recorded in Health's patient profile; these are voice-practice
+cards, not posture-correction or physical-rehabilitation drills. See
+docs/training_activity_catalogue.md for the activity rationale, recording
+quality limitation, and stop rules.
 """
 from __future__ import annotations
 
@@ -211,6 +220,136 @@ EXERCISE_LIBRARY: list[Activity] = [
             "Gradually grow louder over about 5-6 seconds while keeping your pitch steady.",
             "Gradually fade back down to soft over another 5-6 seconds.",
             "Rest, then keep repeating until the timer runs out.",
+        ),
+    ),
+    Activity(
+        id="supported_voice_reset",
+        title="Supported Voice Reset",
+        duration="2m",
+        category="Voice Setup",
+        timer_seconds=120,
+        steps=_steps(
+            "Choose a chair with back support and both feet supported, or an easy neutral standing position; do not hold a corrected posture.",
+            "Let your jaw, tongue, and shoulders soften, and keep the phone or text high enough that you do not lean forward.",
+            "Use quiet nasal breaths, then make a soft mid-range 'mmm' only while it feels easy.",
+            "Reset or change position whenever needed until the timer runs out; stop if back, throat, or breathing comfort worsens.",
+        ),
+    ),
+    Activity(
+        id="lip_trill_ease",
+        title="Lip Trill Ease",
+        duration="3m",
+        category="SOVT / No Device",
+        timer_seconds=180,
+        steps=_steps(
+            "Use a supported chair with your feet supported, or an easy neutral standing position; avoid holding an unfamiliar posture.",
+            "Let your lips vibrate on a quiet, comfortable middle pitch with an easy stream of air.",
+            "Use short trills with quiet rests; if your lips will not trill easily, skip this activity instead of pressing.",
+            "Keep the sound light rather than louder or higher until the timer runs out, and stop if strain, dizziness, or back symptoms increase.",
+        ),
+    ),
+    Activity(
+        id="voiced_v_flow",
+        title="Voiced /v/ Flow",
+        duration="3m",
+        category="SOVT / Flow Phonation",
+        timer_seconds=180,
+        steps=_steps(
+            "Use a supported chair with your feet supported, or an easy neutral standing position; change position whenever needed.",
+            "On an easy exhale, let a light 'vvv' flow into 'voo' at a comfortable middle pitch.",
+            "Keep the start gentle and connected; do not hold your breath or make a hard vocal attack.",
+            "Use short sound-and-rest cycles until the timer runs out, without increasing loudness; stop if throat effort builds.",
+        ),
+    ),
+    Activity(
+        id="nasal_resonance_ladder",
+        title="Nasal Resonance Ladder",
+        duration="3m",
+        category="Resonant Voice",
+        timer_seconds=180,
+        steps=_steps(
+            "Use a supported chair with your feet supported, or an easy neutral standing position; do not brace or hold still.",
+            "Make a soft 'mmm', then 'nnn', then 'ng' as in 'sing', keeping only a light facial vibration.",
+            "Let the final sound open into an easy vowel such as 'mee', with no added loudness.",
+            "Rest or change position between gentle sound sequences until the timer runs out; stop if your throat or back becomes less comfortable.",
+        ),
+    ),
+    Activity(
+        id="resonant_phrase_carryover",
+        title="Resonant Phrase Carryover",
+        duration="3m",
+        category="Functional Resonance",
+        timer_seconds=180,
+        steps=_steps(
+            "Use a supported chair with your feet supported, or an easy neutral standing position, and choose a short everyday phrase.",
+            "Begin with a soft 'mmm', then let it lead directly into the phrase.",
+            "Use a light, normal speaking volume; do not whisper, call, or push for extra volume.",
+            "Pause and reset between phrases until the timer runs out, changing position or stopping if effort or back symptoms increase.",
+        ),
+    ),
+    Activity(
+        id="small_step_pitch_pattern",
+        title="Small-Step Pitch Pattern",
+        duration="3m",
+        category="Pitch Control",
+        timer_seconds=180,
+        steps=_steps(
+            "Use a supported chair with your feet supported, or an easy neutral standing position, and choose a comfortable middle pitch.",
+            "On 'oo', move one small step above that pitch, return to middle, then move one small step below it.",
+            "Keep the notes separate and gentle rather than sliding, and avoid both your top and bottom range.",
+            "Rest or change position between patterns until the timer runs out; stop instead of reaching for a note that feels effortful.",
+        ),
+    ),
+    Activity(
+        id="gentle_phrase_pacing",
+        title="Gentle Phrase Pacing",
+        duration="3m",
+        category="Speech Coordination",
+        timer_seconds=180,
+        steps=_steps(
+            "Use a supported chair with your feet supported, or an easy neutral standing position, with a short passage or everyday phrases ready.",
+            "Say one short phrase on an easy exhale, then pause at a natural phrase end before breathing again.",
+            "Let the next breath be quiet and unforced; do not rush to finish the whole sentence on one breath.",
+            "Continue the speak-and-pause pattern until the timer runs out, changing position or stopping if breathlessness, strain, or back symptoms increase.",
+        ),
+    ),
+    Activity(
+        id="easy_articulation",
+        title="Easy Articulation Practice",
+        duration="3m",
+        category="Speech Clarity",
+        timer_seconds=180,
+        steps=_steps(
+            "Use a supported chair with your feet supported, or an easy neutral standing position, and choose a short familiar passage.",
+            "Speak slowly and clearly, letting your lips and tongue do the work rather than getting louder.",
+            "Keep pitch and volume comfortable; reduce the precision if your jaw or throat starts to catch or tire.",
+            "Pause and reset between phrases until the timer runs out, with no whispering or forced projection.",
+        ),
+    ),
+    Activity(
+        id="chant_to_speech_bridge",
+        title="Chant-to-Speech Bridge",
+        duration="3m",
+        category="Functional Carryover",
+        timer_seconds=180,
+        steps=_steps(
+            "Use a supported chair with your feet supported, or an easy neutral standing position, and choose a short everyday phrase.",
+            "Say the phrase on one comfortable, gentle note, like a short chant.",
+            "Then say the same phrase in natural speech while keeping the same low-effort feeling.",
+            "Keep alternating chant and natural speech until the timer runs out, and stop if you notice increasing strain, hoarseness, or back discomfort.",
+        ),
+    ),
+    Activity(
+        id="voice_recovery_break",
+        title="Brief Voice Recovery Break",
+        duration="2m",
+        category="Voice Recovery",
+        timer_seconds=120,
+        steps=_steps(
+            "Choose a supported chair with your feet supported, or an easy neutral standing position; change position rather than holding still.",
+            "Rest quietly and take water if you would like; do not whisper or repeatedly clear your throat.",
+            "Use quiet nasal breathing and soften your jaw and shoulders while checking that both throat and back comfort stay steady.",
+            "At the end, speak one easy normal sentence only if comfort stayed steady; otherwise finish with quiet rest and stop the activity.",
         ),
     ),
     Activity(
